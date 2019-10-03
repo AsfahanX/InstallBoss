@@ -1,11 +1,5 @@
 @echo off
 CD /D "%~dp0"
-REM CALL:install_3 nama_saya_adalah="oke" jadi tidak apa ya
-REM CALL:install_3 base_dir:"Google Chrome" param:"/passive /norestart" wait:0 
-REM call:echo_no_newline "ini satu baris"
-REM call:echo_no_newline " "masih" satu baris"
-REM pause
-REM exit /b
 
 REM.-- Prepare the Command Processor
 SETLOCAL ENABLEEXTENSIONS
@@ -465,73 +459,6 @@ REM goto:wait_bg_install_loop
 :wait_bg_install__end
 EXIT /B
 
-REM REM ==============================================================================
-REM REM ORIGINAL
-
-REM REM CALL:install ".RUNTIME\Microsoft .NET Framework\.NET Framework 4.7.2" /passive
-REM REM CALL:install ".RUNTIME\Java"
-REM REM CALL:install ".RUNTIME\DirectX\DirectX End-User Runtimes (June 2010)" /silent dxsetup.exe
-
-REM CALL:install "Google Chrome"
-REM CALL:install "Mozilla Firefox" -ms
-REM CALL:install "Adobe Flash Player for Firefox, Safari" -install
-REM REM CALL:install "Adobe Flash Player for Chrome, Chromium, Opera, UC Browser" -install
-REM CALL:install "Adobe Acrobat Reader DC" "-sfx_nu /sALL /msi EULA_ACCEPT=YES"
-REM CALL:install "WinRAR\WinRAR.v5.70.kuyhAa.Me" "/S /IEN"
-REM REM CALL:install "Internet Download Manager (IDM)" "/S /EN"
-
-REM CALL:install "VLC Media Player" /S
-REM CALL:install "K-Lite Codec Pack" "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"
-REM CALL:install "GOM Player" /S AUTO GRETECH\GOMPlayerPlus
-REM CALL:install "AIMP" "/AUTO /SILENT"
-
-REM CALL:install "Microsoft Office 2007 SP3" "/adminfile '%~dp0Microsoft Office 2007 SP3\basic.MSP'" AUTO AUTO FALSE
-REM CALL:install "Microsoft Office 2016" "/adminfile '%~dp0Microsoft Office 2016\%windows_bit%\basic.MSP'" AUTO AUTO FALSE
-REM REM CALL:install "Microsoft Office 2016" "/adminfile '%~dp0Microsoft Office 2016\64\basic.MSP'" AUTO AUTO FALSE
-REM REM CALL:install "Microsoft Office 2016" "/adminfile '%~dp0Microsoft Office 2016\32\basic.MSP'" AUTO AUTO FALSE
-REM CALL:install "Adobe Photoshop CS 4" "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"
-REM CALL:install "CCleaner" "/S /IT /TM"
-REM CALL:install "Format Factory" "/VERYSILENT /I /EN"
-REM CALL:install "7Zip"
-REM CALL:install "Notepad++" /S
-
-REM REM ORIGINAL
-REM REM ==============================================================================
-
-REM REM ==============================================================================
-REM REM TEST
-
-REM REM CALL:install ".RUNTIME\Microsoft .NET Framework\.NET Framework 4.7.2" /passive
-REM REM CALL:install ".RUNTIME\Java"
-REM REM CALL:install ".RUNTIME\DirectX\DirectX End-User Runtimes (June 2010)" /silent dxsetup.exe
-
-REM CALL:install "Google Chrome"
-REM CALL:install "Mozilla Firefox"
-REM CALL:install "Adobe Flash Player for Firefox, Safari"
-REM REM CALL:install "Adobe Flash Player for Chrome, Chromium, Opera, UC Browser" -install
-REM CALL:install "Adobe Acrobat Reader DC"
-REM CALL:install "WinRAR\WinRAR.v5.70.kuyhAa.Me"
-REM REM CALL:install "Internet Download Manager (IDM)" "/S /EN"
-
-REM CALL:install "VLC Media Player"
-REM CALL:install "K-Lite Codec Pack"
-REM CALL:install "GOM Player"
-REM CALL:install "AIMP"
-
-REM CALL:install "Microsoft Office 2007 SP3" "/adminfile '%~dp0Microsoft Office 2007 SP3\basic.MSP'" AUTO AUTO FALSE
-REM CALL:install "Microsoft Office 2016" "/adminfile '%~dp0Microsoft Office 2016\%windows_bit%\basic.MSP'" AUTO AUTO FALSE
-REM REM CALL:install "Microsoft Office 2016" "/adminfile '%~dp0Microsoft Office 2016\64\basic.MSP'" AUTO AUTO FALSE
-REM REM CALL:install "Microsoft Office 2016" "/adminfile '%~dp0Microsoft Office 2016\32\basic.MSP'" AUTO AUTO FALSE
-REM CALL:install "Adobe Photoshop CS 4"
-REM CALL:install "CCleaner"
-REM CALL:install "Format Factory"
-REM CALL:install "7Zip"
-REM CALL:install "Notepad++"
-
-REM REM TEST
-REM REM ==============================================================================
-
-REM CALL:install "" /S AUTO AUTO
 
 :init_error_code
 SET /A "_ERR_APP_CFG_NOT_FOUND=101"
@@ -2247,18 +2174,5 @@ REM Function body
 :tes_func
 for /f "tokens=*" %%A in ('findstr "adalah"') do (
     echo %%A
-)
-
-:create_object var
-SetLocal ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
-
-(ENDLOCAL & REM RETURN VALUES
-    
-)
-
-IF %ERRORLEVEL% NEQ 0 (
-    Echo An error was found
-    REM Command
-    
 )
 
