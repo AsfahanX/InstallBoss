@@ -1,6 +1,8 @@
 @echo off
 CD /D "%~dp0"
 
+REM Test Signed commit
+
 REM.-- Prepare the Command Processor
 SETLOCAL ENABLEEXTENSIONS
 SETLOCAL ENABLEDELAYEDEXPANSION
