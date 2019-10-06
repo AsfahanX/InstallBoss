@@ -1,20 +1,24 @@
 @echo off
-CD /D "%~dp0"
 
-REM Test Signed commit
+CD /D "%~dp0"
 
 REM.-- Prepare the Command Processor
 SETLOCAL ENABLEEXTENSIONS
 SETLOCAL ENABLEDELAYEDEXPANSION
+CALL:get_windows_number windows_number
+CALL:get_windows_bit windows_bit
+CALL:init_color_code
 
 REM.-- Version History --
 REM         0.1           20191003 Author Asfahann
+REM         0.2           20191006 Author Asfahann
 SET version=0.1-beta & rem 20191003 p.h.  initial version, providing the framework
+SET version=0.2 & rem 20191006 p.h.  Added feature to create folder structure example
 REM !! For a new version entry, copy the last entry down and modify Date, Author and Description
 SET version=%version: =%
 
 REM.-- Set the window title 
-SET title=%~n0
+SET title=%~n0 v%version%
 TITLE %title%
 
 REM ====================================================================
@@ -31,12 +35,12 @@ SET "VERBOSE_LEVEL_ERROR=1"
 SET "VERBOSE_LEVEL_WARNING=2"
 SET "VERBOSE_LEVEL_INFO=3"
 
-CALL:init_color_code
-
 SET "install_mode=%_MODE_TEST%"
 
 REM ====================================================================
 REM SETTINGS
+SET "search_folder=%~dp0"
+SET search_folder=%search_folder:~0,-1%
 SET "SETTINGS_VERBOSE_LEVEL=5"
 SET "default_msi_param=/passive"
 SET log_file="%~dpn0.log"
@@ -44,10 +48,12 @@ SET error_log_file="%~dpn0.error.log"
 SET "params_ini_file=%~dpn0.params.ini"
 REM SET "tmp_params_ini_file=%params_ini_file%.tmp"
 
+REM Temporary files
 SET "tmp_folder=%TMP%\%~n0"
 SET "tmp_params_ini_file=%tmp_folder%\%~n0.params.ini.tmp"
 SET "exit_codes_file=%tmp_folder%\%~n0.exit_codes.tmp"
 SET "paket_semua_folder_file=%tmp_folder%\%~n0.paket.all.tmp"
+SET "tmp_html_file=%tmp_folder%\display_links.html"
 
 SET "no_wait_installers_file=%tmp_folder%\%~n0.no_wait_installers.tmp"
 SET "no_wait_installers_finished=%tmp_folder%\%~n0.no_wait_installers_finished.tmp"
@@ -71,36 +77,59 @@ REM echo.START %DATE% %TIME% >>%error_log_file%
 REM echo.START %DATE% %TIME% >>%log_file%
 
 REM Handle 3 redirected to log file
-SET "LOG=1>&%STREAM_HANDLE_FOR_LOG% echo"
-REM SET "LOG=1>> %log_file% echo"
+REM SET "LOG=1>&%STREAM_HANDLE_FOR_LOG% echo"
+SET "LOG=1>> %log_file% echo"
+SET "LOG_ERR=2>> %log_file% echo"
 SET "LOG_RAW=1>&%STREAM_HANDLE_FOR_LOG%"
 
-CALL:main 2>>%log_file% %STREAM_HANDLE_FOR_LOG%>&2
-EXIT /B
+CALL:main
+:end
+REM.-- End of application
+FOR /l %%a in (5,-1,1) do (TITLE %title% -- closing in %%as&ping -n 2 -w 1 127.0.0.1>NUL)
+TITLE Press any key to close the application&ECHO.&EXIT /B
 
 :main
 REM ====================================================================
 REM INIT
 REM SetLocal EnableExtensions EnableDelayedExpansion
 
+
 %LOG%.
 %LOG% --------------------------------
 %LOG% START %DATE% %TIME%
-REM dir s
-REM DIR S
-REM %LOG% CALL:echo_color "echo color" %COLOR_BLACK%
-REM pause
-REM exit /b
 
-Title %~n0
+REM Check administrator
+net session >nul 2>&1
+if %ERRORLEVEL% NEQ 0 (
+    call:echo_color_nonewline "WARNING" %COLOR_YELLOW% 
+    echo. Script not running as Administrator ^^!
+    echo Some app require administrator rights to be installed.
+    SET input_confirm=Y
+    SET /P input_confirm="Continue [Y/n]? "
+    IF /I NOT "!input_confirm!"=="Y" (
+        goto:end
+    )
+)
+
+REM Check INI file
 IF NOT EXIST "%params_ini_file%" (
     echo creating default params file . . .
     %LOG% Creating default INI file
     CALL:create_default_ini_file "%params_ini_file%"
 )
+call:get_ini_content "%params_ini_file%" ini
+
+REM TODO Detect first run
+IF 1 EQU 0 (
+    SET "input_yes_no=N"
+    SET /P input_yes_no="Buat Contoh Struktur Folder [y/N] ? "
+    IF /I "!input_yes_no!"=="y" (
+        call:create_example_folder_structure
+    )
+)
+
 REM findstr /vrc:"^[%COMMENT_CHAR%]" "%params_ini_file%" >"%tmp_params_ini_file%"
-CALL:get_windows_number windows_number
-CALL:get_windows_bit windows_bit
+
 
 REM call:echo_color_nonewline "ini satu baris" %COLOR_GREEN%
 REM call:echo_color_nonewline " masih satu baris"  %COLOR_GREEN%
@@ -110,7 +139,6 @@ REM pause
 REM exit /b
 
 
-REM SetLocal EnableExtensions EnableDelayedExpansion
 REM ====================================================================
 REM MAIN MENU
 SET "menu_item_prefix=   "
@@ -154,7 +182,7 @@ IF "%menu_pilih_paket_choice%"=="I" (
     %LOG% Menu Install Semua Folder is selected
     SET "pkg_desc=Paket Semua Folder"
     SET "pkg_file=%paket_semua_folder_file%"
-    DIR /ad-h /B | findstr /v /r /c:"^[.]">"!pkg_file!"
+    DIR "%search_folder%" /ad-h /B | findstr /v /r /c:"^[.]">"!pkg_file!"
     IF EXIST "!pkg_file!" (
         %LOG% paket file created: !pkg_file!
     ) ELSE (
@@ -1205,6 +1233,8 @@ REM CONTENT
     echo [Google Chrome]
     echo param=/passive /norestart
     echo param_quiet=/quiet /norestart
+    echo direct_download_url_32=https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise.msi
+    echo direct_download_url_64=https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi
     echo [Internet Download Manager IDM]
     echo param=/S /EN
     echo [Java]
@@ -1223,7 +1253,6 @@ REM CONTENT
     echo param=/adminfile basic.MSP
     echo wait=false
     echo [Microsoft Office 2016]
-    echo ;param=/adminfile "[CD]\basic.MSP"
     echo param=/adminfile basic_all.MSP
     echo wait=false
     echo [Microsoft Visual C++ Redistributable]
@@ -1231,8 +1260,11 @@ REM CONTENT
     echo param_quiet=/quiet /norestart
     echo [Mozilla Firefox]
     echo param=-ms
+    echo direct_download_url_32=https://download.mozilla.org/?product=firefox-latest&os=win&lang=en-US
+    echo direct_download_url_64=https://download.mozilla.org/?product=firefox-latest&os=win64&lang=en-US
     echo [MSI Afterburner]
     echo param=/S
+    echo direct_download_url=http://download.msi.com/uti_exe/vga/MSIAfterburnerSetup.zip
     echo [Notepad++]
     echo param=/S
     echo [Snappy Driver Installer]
@@ -1243,7 +1275,6 @@ REM CONTENT
     echo param=/S
     echo [WinRAR]
     echo param=/S /IEN
-    echo.
 )>> "%filename%"
 
 IF NOT EXIST "%file_name%" (
@@ -1268,7 +1299,7 @@ SET "new_pkg_desc=%~1"
 SET "new_pkg_file=%~2"
 
 SET /A "pkg_item_length=0"
-FOR /F "tokens=*" %%A in ('DIR /ad-h /B ^| findstr /v /r /c:"^\."') DO (
+FOR /F "tokens=*" %%A in ('DIR "%search_folder%" /ad-h /B ^| findstr /v /r /c:"^\."') DO (
     SET /A pkg_item_length+=1
     SET pkg_item_!pkg_item_length!=%%A
     SET /A "pkg_item_!pkg_item_length!_selected=0"
@@ -1463,6 +1494,13 @@ SET COLOR_CYAN_STRONG=96
 SET COLOR_WHITE_STRONG=97
 
 EXIT /B
+
+:print_all_color
+FOR /F "tokens=1* delims==" %%A in ('SET COLOR_') DO (
+    call:echo_color_nonewline "%%B" %%B
+    call:echo_color " %%A" %%B
+)
+exit /b
 
 :echo_color str color_code
 IF "%windows_number%"=="10" (
@@ -1948,15 +1986,18 @@ EXIT /b
 SET /A "section_num=0"
 SET "section=NO_SECTION"
 FOR /F "delims=" %%G in ('type "%~1"') DO (
-    set line=%%G
+    set "line=%%G"
     IF "!line:~0,1!" EQU ";" (
         REM DO nothing. comment
     ) ELSE IF "!line:~0,1!" EQU "[" (
         SET /A "section_num=section_num+1"
         REM FOR /F "delims=[]" %%g in ("!line!") DO SET %~2.section[!section_num!]=%%g
-        FOR /F "delims=[]" %%g in ("!line!") DO SET "section=%%g"
+        FOR /F "delims=[]" %%g in ("!line!") DO (
+            SET "section=%%g"
+            SET "%~2.section[!section_num!]=!section!"
+        )
     ) ELSE (
-        FOR /F "tokens=1,2* delims==" %%g in ("!line!") DO SET %~2.section[!section!].%%g=%%h
+        FOR /F "tokens=1* delims==" %%g in ("!line!") DO ( SET "%~2.section[!section!].%%g=%%h")
     )
 )
 SET /A "%~2.section.length=%section_num%"
@@ -2107,13 +2148,14 @@ for /f "%skip%delims=" %%A in ("!new_str!") do (
 EXIT /B %errorlevel%
 
 :create_shortcut file url
+
 REM Obtain from google
 (
     echo [{000214A0-0000-0000-C000-000000000046}]
     echo Prop3=19,11
     echo [InternetShortcut]
     echo IDList=
-    echo URL=%~2
+    echo URL=%2
     echo HotKey=0
 ) > "%~1"
 exit /b
@@ -2178,3 +2220,89 @@ for /f "tokens=*" %%A in ('findstr "adalah"') do (
     echo %%A
 )
 
+:create_example_folder_structure
+echo Creating Folder structure example on %search_folder%
+SET "ini_key_for_download=direct_download_url"
+SET "ini_key_for_download_32=direct_download_url_32"
+SET "ini_key_for_download_64=direct_download_url_64"
+
+SET "command=SET ini.section[ ^| findstr /RC:"^ini\.section\[[0-9][0-9]*\]=""
+FOR /F "tokens=1* delims==" %%G in ('%command%') DO (
+    SET "section=%%H"
+
+    REM 32/64
+    SET "shortcut_dir=%search_folder%\!section!"
+    SET "ini_key=%ini_key_for_download%"
+    IF DEFINED ini.section[!section!].!ini_key! (
+        IF NOT EXIST "!shortcut_dir!" MD "!shortcut_dir!"
+        SET "shortcut_file=!shortcut_dir!\!ini_key!.url"
+        CALL SET "url=%%ini.section[!section!].!ini_key!%%"
+        echo Creating shortcut for !section!
+        call:create_shortcut "!shortcut_file!" "!url!"
+    )
+
+    REM 32
+    SET "shortcut_dir=%search_folder%\!section!\32"
+    SET "ini_key=%ini_key_for_download_32%"
+    IF DEFINED ini.section[!section!].!ini_key! (
+        IF NOT EXIST "!shortcut_dir!" MD "!shortcut_dir!"
+        SET "shortcut_file=!shortcut_dir!\!ini_key!.url"
+        CALL SET "url=%%ini.section[!section!].!ini_key!%%"
+        echo Creating shortcut for !section!
+        call:create_shortcut "!shortcut_file!" "!url!"
+    )
+
+    REM 64
+    SET "shortcut_dir=%search_folder%\!section!\64"
+    SET "ini_key=%ini_key_for_download_64%"
+    IF DEFINED ini.section[!section!].!ini_key! (
+        IF NOT EXIST "!shortcut_dir!" MD "!shortcut_dir!"
+        SET "shortcut_file=!shortcut_dir!\!ini_key!.url"
+        CALL SET "url=%%ini.section[!section!].!ini_key!%%"
+        echo Creating shortcut for !section!
+        call:create_shortcut "!shortcut_file!" "!url!"
+    )
+)
+
+REM md "%search_folder%\VLC Media Player"
+REM call:create_shortcut "%search_folder%\VLC Media Player\test.url" "http://www.google.com"
+exit /b
+
+:get_url_from_shortcut shortcut_file out_var
+FOR /F "tokens=1* delims==" %%A in ('findstr /LIBC:"URL=" "%~1"') DO (
+    SET "%~2=%%B"
+)
+exit /b
+
+:construct_html_init file
+(
+    echo ^<^^!doctype html^>
+    echo ^<html lang="en"^>
+    echo   ^<head^>
+    echo     ^<meta charset="utf-8"^>
+    echo     ^<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"^>
+    echo     ^<title^>Links^</title^>
+    echo   ^</head^>
+    echo   ^<body^>
+    echo   ^<h1^> Scanned Links ^</h1^>
+
+) > "%~1"
+exit /b
+
+:construct_html_insert_link file a_href a_text
+(
+    echo     ^<strong^>
+    echo     ^<a target="_blank" href="%~2"^>
+    echo       %~3
+    echo     ^</a^>
+    echo     ^</strong^>
+    echo     ^<br^>
+    echo     ^<br^>
+) >> "%~1"
+exit /b
+
+:construct_html_end file
+(
+    echo   ^</body^>
+    echo ^</html^>
+) >> "%~1"
