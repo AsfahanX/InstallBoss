@@ -1,13 +1,10 @@
 @echo off
-
-CD /D "%~dp0"
+REM https://github.com/asfahann/InstallBoss/releases/latest
 
 REM.-- Prepare the Command Processor
 SETLOCAL ENABLEEXTENSIONS
 SETLOCAL ENABLEDELAYEDEXPANSION
-CALL:get_windows_number windows_number
-CALL:get_windows_bit windows_bit
-CALL:init_color_code
+CD /D "%~dp0"
 
 REM.-- Version History --
 REM         0.1           20191003 Author Asfahann
@@ -23,13 +20,16 @@ TITLE %title%
 
 REM ====================================================================
 REM CONSTANTS
+
+CALL:init_color_code
+CALL:init_error_code
+
 SET "_MODE_INSTALL=1"
 SET "_MODE_TEST=2"
 
 SET "COMMENT_CHAR=;"
 SET "google_search=https://www.google.com/search?q="
-
-CALL:init_error_code
+SET "latest_release_url=https://github.com/asfahann/InstallBoss/releases/latest"
 
 SET "VERBOSE_LEVEL_ERROR=1"
 SET "VERBOSE_LEVEL_WARNING=2"
@@ -38,15 +38,21 @@ SET "VERBOSE_LEVEL_INFO=3"
 SET "install_mode=%_MODE_TEST%"
 
 REM ====================================================================
-REM SETTINGS
-SET "search_folder=%~dp0"
-SET search_folder=%search_folder:~0,-1%
-SET "SETTINGS_VERBOSE_LEVEL=5"
-SET "default_msi_param=/passive"
+REM APPLICATION SETTINGS
+
+SET script_fullname=%~f0
+SET script_path=%~dp0
+SET script_path=%script_path:~0,-1%
+SET script_file_name=%~nx0
+SET script_base_name=%~n0
+
+REM Configuration file
+SET ini_file=%script_path%\%script_base_name%.params.ini
+SET "params_ini_file=%~dpn0.params.ini"
+
+rem Log files
 SET log_file="%~dpn0.log"
 SET error_log_file="%~dpn0.error.log"
-SET "params_ini_file=%~dpn0.params.ini"
-REM SET "tmp_params_ini_file=%params_ini_file%.tmp"
 
 REM Temporary files
 SET "tmp_folder=%TMP%\%~n0"
@@ -62,8 +68,13 @@ SET "no_wait_installers_exit_codes_file=%tmp_folder%\%~n0.no_wait_installers_exi
 
 IF NOT EXIST "%tmp_folder%" MD "%tmp_folder%"
 DEL /Q "%tmp_folder%\*"
-REM CALLREMpaket_install "%~dp0" %tmp_file%
 
+REM ====================================================================
+REM USER SETTINGS
+SET "search_folder=%~dp0"
+SET search_folder=%search_folder:~0,-1%
+SET "SETTINGS_VERBOSE_LEVEL=5"
+SET "default_msi_param=/passive /norestart"
 
 SET "param_tipe_1=/S"
 SET "param_tipe_2=/S /IEN"
@@ -72,31 +83,23 @@ SET "param_tipe_3=/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"
 SET "STREAM_HANDLE_FOR_LOG=3"
 SET "STREAM_HANDLE_FOR_INTERNAL_ERROR=4"
 
-
-REM echo.START %DATE% %TIME% >>%error_log_file%
-REM echo.START %DATE% %TIME% >>%log_file%
-
 REM Handle 3 redirected to log file
 REM SET "LOG=1>&%STREAM_HANDLE_FOR_LOG% echo"
 SET "LOG=1>> %log_file% echo"
 SET "LOG_ERR=2>> %log_file% echo"
 SET "LOG_RAW=1>&%STREAM_HANDLE_FOR_LOG%"
 
-CALL:main
-:end
-REM.-- End of application
-FOR /l %%a in (5,-1,1) do (TITLE %title% -- closing in %%as&ping -n 2 -w 1 127.0.0.1>NUL)
-TITLE Press any key to close the application&ECHO.&EXIT /B
-
-:main
 REM ====================================================================
 REM INIT
-REM SetLocal EnableExtensions EnableDelayedExpansion
-
 
 %LOG%.
 %LOG% --------------------------------
 %LOG% START %DATE% %TIME%
+
+CALL:get_hash_256 "%~f0" sha_256_hash
+CALL:get_windows_number windows_number
+CALL:get_windows_bit windows_bit
+
 
 REM Check administrator
 net session >nul 2>&1
@@ -105,9 +108,10 @@ if %ERRORLEVEL% NEQ 0 (
     echo. Script not running as Administrator ^^!
     echo Some app require administrator rights to be installed.
     SET input_confirm=Y
-    SET /P input_confirm="Continue [Y/n]? "
-    IF /I NOT "!input_confirm!"=="Y" (
-        goto:end
+    SET /P input_confirm="Restart as administrator [Y/n]? "
+    IF /I "!input_confirm!"=="Y" (
+        start "Restarting as administrator" /D "%CD%" /MIN powershell -command Start-Process -FilePath "%script_fullname%" -WorkingDirectory "%CD%" -Verb RunAs
+        exit /b
     )
 )
 
@@ -119,6 +123,21 @@ IF NOT EXIST "%params_ini_file%" (
 )
 call:get_ini_content "%params_ini_file%" ini
 
+
+REM ====================================================================
+REM MAIN
+CALL:main
+:end
+REM.-- End of application
+FOR /l %%a in (5,-1,1) do (TITLE %title% -- closing in %%as&ping -n 2 -w 1 127.0.0.1>NUL)
+TITLE Press any key to close the application
+ECHO.
+EXIT /B
+
+REM ====================================================================
+REM MAIN
+:main
+
 REM TODO Detect first run
 IF 1 EQU 0 (
     SET "input_yes_no=N"
@@ -128,17 +147,6 @@ IF 1 EQU 0 (
     )
 )
 
-REM findstr /vrc:"^[%COMMENT_CHAR%]" "%params_ini_file%" >"%tmp_params_ini_file%"
-
-
-REM call:echo_color_nonewline "ini satu baris" %COLOR_GREEN%
-REM call:echo_color_nonewline " masih satu baris"  %COLOR_GREEN%
-REM call:echo_color_nonewline COBA  %COLOR_GREEN%
-REM call:echo_color coba %COLOR_RED%
-REM pause
-REM exit /b
-
-
 REM ====================================================================
 REM MAIN MENU
 SET "menu_item_prefix=   "
@@ -146,10 +154,10 @@ SET "menu_item_prefix=   "
 :menu_pilih_paket
 SET "pkgs_num=0"
 %LOG% Searching paket files
-FOR /F "tokens=*" %%A in ('dir "%~dp0" /b /a-d /od ^| findstr /i /r /c:"%~n0[.]paket[.].*txt$"') do (
+FOR /F "tokens=*" %%A in ('dir "%script_path%" /b /a-d /od ^| findstr /i /r /c:"^%script_base_name%\.paket\..*\.txt$"') do (
     SET /A pkgs_num+=1
     SET "tmp_pkgs_filename=%%~nA"
-    SET "tmp_pkgs_desc=!tmp_pkgs_filename:%~n0.paket.=!"
+    SET "tmp_pkgs_desc=!tmp_pkgs_filename:%script_base_name%.paket.=!"
     SET "pkgs_!pkgs_num!_file=%%~A"
     SET "pkgs_!pkgs_num!_desc=Paket !tmp_pkgs_desc!"
 )
@@ -193,8 +201,8 @@ IF "%menu_pilih_paket_choice%"=="I" (
 )
 
 REM Buat paket
-IF "%menu_pilih_paket_choice%"=="b" SET "menu_pilih_paket_choice=B"
-IF "%menu_pilih_paket_choice%"=="B" (
+REM IF "%menu_pilih_paket_choice%"=="b" SET "menu_pilih_paket_choice=B"
+IF /I "%menu_pilih_paket_choice%"=="B" (
     %LOG% Menu Buat Paket is selected
     CALL:buat_paket pkg_desc pkg_file
     IF EXIST "!pkg_file!" (
@@ -202,7 +210,7 @@ IF "%menu_pilih_paket_choice%"=="B" (
     ) ELSE (
         >&2 echo Can't create paket file !pkg_file!
     )
-    SET "pkg_desc=Paket !pkg_desc!
+    SET "pkg_desc=Paket !pkg_desc!"
     goto menu_isi_paket
 )
 IF DEFINED pkgs_%menu_pilih_paket_choice%_file (
@@ -297,7 +305,7 @@ IF NOT %install_mode%==%_MODE_INSTALL% (
 REM ====================================================================
 REM START INSTALLING
 REM CALL:initProgress %pkg_length% "[[PPPP]] %~n0"
-CALL:initProgress %pkg_length% "[[PPPP]] %~n0 - [[C] of %pkg_length%] Installing"
+CALL:initProgress %pkg_length% "[[PPPP]] %title% - [[C] of %pkg_length%] Installing"
 CLS
 SET fail_count=0
 FOR /L %%A IN (1,1,%pkg_length%) DO (
@@ -1982,6 +1990,14 @@ IF DEFINED outResult (
 
 EXIT /b
 
+:get_hash_256 file outVar
+SET "%~2="
+FOR /F "delims=" %%G in ('certutil -hashfile "%~1" sha256 ^| findstr /LV "hash CertUtil"') DO (
+    SET "%~2=%%G"
+)
+EXIT /B
+
+
 :get_ini_content file outVar
 SET /A "section_num=0"
 SET "section=NO_SECTION"
@@ -2270,39 +2286,39 @@ exit /b
 
 :get_url_from_shortcut shortcut_file out_var
 FOR /F "tokens=1* delims==" %%A in ('findstr /LIBC:"URL=" "%~1"') DO (
-    SET "%~2=%%B"
+	SET "%~2=%%B"
 )
 exit /b
 
 :construct_html_init file
 (
-    echo ^<^^!doctype html^>
-    echo ^<html lang="en"^>
-    echo   ^<head^>
-    echo     ^<meta charset="utf-8"^>
-    echo     ^<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"^>
-    echo     ^<title^>Links^</title^>
-    echo   ^</head^>
-    echo   ^<body^>
-    echo   ^<h1^> Scanned Links ^</h1^>
+	echo ^<^^!doctype html^>
+	echo ^<html lang="en"^>
+	echo   ^<head^>
+	echo     ^<meta charset="utf-8"^>
+	echo     ^<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"^>
+	echo     ^<title^>Links^</title^>
+	echo   ^</head^>
+	echo   ^<body^>
+	echo   ^<h1^> Scanned Links ^</h1^>
 
 ) > "%~1"
 exit /b
 
 :construct_html_insert_link file a_href a_text
 (
-    echo     ^<strong^>
-    echo     ^<a target="_blank" href="%~2"^>
-    echo       %~3
-    echo     ^</a^>
-    echo     ^</strong^>
-    echo     ^<br^>
-    echo     ^<br^>
+	echo     ^<strong^>
+	echo     ^<a target="_blank" href="%~2"^>
+	echo       %~3
+	echo     ^</a^>
+	echo     ^</strong^>
+	echo     ^<br^>
+	echo     ^<br^>
 ) >> "%~1"
 exit /b
 
 :construct_html_end file
 (
-    echo   ^</body^>
-    echo ^</html^>
+	echo   ^</body^>
+	echo ^</html^>
 ) >> "%~1"
