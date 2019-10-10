@@ -79,6 +79,7 @@ SET "SETTINGS_VERBOSE_LEVEL=5"
 SET "default_msi_param=/passive /norestart"
 
 SET "verbose=0"
+SET /A "suppress_error=0"
 
 SET "param_tipe_1=/S"
 SET "param_tipe_2=/S /IEN"
@@ -112,7 +113,7 @@ REM Check administrator
 net session >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
     call:echo_color_nonewline "WARNING" %COLOR_YELLOW% 
-    echo. Script not running as Administrator ^^!
+    echo Script not running as Administrator ^^!
     echo Some app require administrator rights to be installed.
     echo.
     SET input_confirm=Y
@@ -134,11 +135,11 @@ IF NOT EXIST "%params_ini_file%" (
 )
 
 call:get_ini_content "%params_ini_file%" IniContent
-set IniContent
+REM set IniContent
 call:get_appcfg IniContent "Google Chrome" AppCfg
-set AppCfg
-pause
-exit /b
+REM set AppCfg
+REM pause
+REM exit /b
 
 REM ====================================================================
 REM MAIN
@@ -366,7 +367,7 @@ FOR /L %%A IN (1,1,%pkg_length%) DO (
     SET /A code=!pkg_item_%%A_exit_code!
     CALL:get_error_description !code! desc
     IF !code! NEQ 0 (
-        echo    %%A. !pkg_item_%%A! ===^> !desc!
+        echo    %%A. !pkg_item_%%A! ===^> Code: !code!. !desc!
     )
 )
 FOR /L %%A IN (1,1,%bg_proc_num%) DO (
@@ -766,7 +767,7 @@ SET "param="
 SET "crack_dir="
 SET "crack_file="
 SET "crack_dst="
-SET "script="
+SET "extra_script="
 SET /A "cfg_status_code=0"
 SET "status="
 SET "desc=%section_name%"
