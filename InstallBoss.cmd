@@ -31,9 +31,11 @@ SET "COMMENT_CHAR=;"
 SET "google_search=https://www.google.com/search?q="
 SET "latest_release_url=https://github.com/asfahann/InstallBoss/releases/latest"
 
-SET "VERBOSE_LEVEL_ERROR=1"
-SET "VERBOSE_LEVEL_WARNING=2"
-SET "VERBOSE_LEVEL_INFO=3"
+SET /A "VERBOSE_LEVEL_ERROR=1"
+SET /A "VERBOSE_LEVEL_WARNING=2"
+SET /A "VERBOSE_LEVEL_INFO=3"
+
+
 
 SET "install_mode=%_MODE_TEST%"
 
@@ -71,10 +73,12 @@ DEL /Q "%tmp_folder%\*"
 
 REM ====================================================================
 REM USER SETTINGS
-SET "search_folder=%~dp0"
-SET search_folder=%search_folder:~0,-1%
+SET "search_location=%~dp0"
+SET search_location=%search_location:~0,-1%
 SET "SETTINGS_VERBOSE_LEVEL=5"
 SET "default_msi_param=/passive /norestart"
+
+SET "verbose=0"
 
 SET "param_tipe_1=/S"
 SET "param_tipe_2=/S /IEN"
@@ -92,6 +96,9 @@ SET "LOG_RAW=1>&%STREAM_HANDLE_FOR_LOG%"
 REM ====================================================================
 REM INIT
 
+SET "ECHO_VERBOSE=REM ."
+IF "%verbose%" EQU "1" SET "ECHO_VERBOSE=echo [VERBOSE]"
+
 %LOG%.
 %LOG% --------------------------------
 %LOG% START %DATE% %TIME%
@@ -107,12 +114,16 @@ if %ERRORLEVEL% NEQ 0 (
     call:echo_color_nonewline "WARNING" %COLOR_YELLOW% 
     echo. Script not running as Administrator ^^!
     echo Some app require administrator rights to be installed.
+    echo.
     SET input_confirm=Y
-    SET /P input_confirm="Restart as administrator [Y/n]? "
+    SET /P input_confirm="Restart as administrator [Y/n] ? "
     IF /I "!input_confirm!"=="Y" (
-        start "Restarting as administrator" /D "%CD%" /MIN powershell -command Start-Process -FilePath "%script_fullname%" -WorkingDirectory "%CD%" -Verb RunAs
+        REM echo start "Restarting as administrator" /D "%CD%" /MIN powershell -command Start-Process -FilePath "%script_fullname%" -WorkingDirectory "%CD%" -Verb RunAs
+        REM pause
+        start "Restarting as administrator" /D "%CD%" /MIN powershell -command "& {Start-Process -FilePath '%script_fullname%' -WorkingDirectory '%CD%' -Verb RunAs}"
         exit /b
     )
+    echo.
 )
 
 REM Check INI file
@@ -121,17 +132,23 @@ IF NOT EXIST "%params_ini_file%" (
     %LOG% Creating default INI file
     CALL:create_default_ini_file "%params_ini_file%"
 )
-call:get_ini_content "%params_ini_file%" ini
 
+call:get_ini_content "%params_ini_file%" IniContent
+set IniContent
+call:get_appcfg IniContent "Google Chrome" AppCfg
+set AppCfg
+pause
+exit /b
 
 REM ====================================================================
 REM MAIN
 CALL:main
 :end
 REM.-- End of application
-FOR /l %%a in (5,-1,1) do (TITLE %title% -- closing in %%as&ping -n 2 -w 1 127.0.0.1>NUL)
-TITLE Press any key to close the application
+REM FOR /l %%a in (5,-1,1) do (TITLE %title% -- closing in %%as&ping -n 2 -w 1 127.0.0.1>NUL)
+REM TITLE Press any key to close the application
 ECHO.
+pause
 EXIT /B
 
 REM ====================================================================
@@ -139,7 +156,11 @@ REM MAIN
 :main
 
 REM TODO Detect first run
-IF 1 EQU 0 (
+SET /A "folder_found=0"
+FOR /F "delims=" %%G in ('DIR "%search_location%" /ad-h /B ^| findstr /v /r /c:"^[.]"') DO (
+    SET /A "folder_found=1"
+)
+IF %folder_found% EQU 0 (
     SET "input_yes_no=N"
     SET /P input_yes_no="Buat Contoh Struktur Folder [y/N] ? "
     IF /I "!input_yes_no!"=="y" (
@@ -153,13 +174,20 @@ SET "menu_item_prefix=   "
 
 :menu_pilih_paket
 SET "pkgs_num=0"
+SET /A "PaketInstall.Length=0"
+SET "tmp_nama_paket="
+SET "tmp_file_name="
 %LOG% Searching paket files
 FOR /F "tokens=*" %%A in ('dir "%script_path%" /b /a-d /od ^| findstr /i /r /c:"^%script_base_name%\.paket\..*\.txt$"') do (
     SET /A pkgs_num+=1
+    SET /A "PaketInstall.Length+=1"
     SET "tmp_pkgs_filename=%%~nA"
     SET "tmp_pkgs_desc=!tmp_pkgs_filename:%script_base_name%.paket.=!"
+    SET "tmp_nama_paket="
     SET "pkgs_!pkgs_num!_file=%%~A"
     SET "pkgs_!pkgs_num!_desc=Paket !tmp_pkgs_desc!"
+    SET PaketInstall[!PaketInstall.Length!].File=%%~A
+    SET PaketInstall[!PaketInstall.Length!].Name=%%~A
 )
 %LOG% Found %pkgs_num% paket
 
@@ -187,10 +215,10 @@ IF NOT DEFINED menu_pilih_paket_choice goto menu_pilih_paket
 REM Paket Semua folder
 IF "%menu_pilih_paket_choice%"=="i" SET "menu_pilih_paket_choice=I"
 IF "%menu_pilih_paket_choice%"=="I" (
-    %LOG% Menu Install Semua Folder is selected
+    %LOG% [USER INPUT] Menu Install Semua Folder is selected
     SET "pkg_desc=Paket Semua Folder"
     SET "pkg_file=%paket_semua_folder_file%"
-    DIR "%search_folder%" /ad-h /B | findstr /v /r /c:"^[.]">"!pkg_file!"
+    DIR "%search_location%" /ad-h /B | findstr /v /r /c:"^[.]">"!pkg_file!"
     IF EXIST "!pkg_file!" (
         %LOG% paket file created: !pkg_file!
     ) ELSE (
@@ -203,7 +231,7 @@ IF "%menu_pilih_paket_choice%"=="I" (
 REM Buat paket
 REM IF "%menu_pilih_paket_choice%"=="b" SET "menu_pilih_paket_choice=B"
 IF /I "%menu_pilih_paket_choice%"=="B" (
-    %LOG% Menu Buat Paket is selected
+    %LOG% [USER INPUT] Menu Buat Paket is selected
     CALL:buat_paket pkg_desc pkg_file
     IF EXIST "!pkg_file!" (
         %LOG% paket file created: !pkg_file!
@@ -217,7 +245,7 @@ IF DEFINED pkgs_%menu_pilih_paket_choice%_file (
     REM Load paket pilihan
     SET "pkg_file=!pkgs_%menu_pilih_paket_choice%_file!"
     SET "pkg_desc=!pkgs_%menu_pilih_paket_choice%_desc!"
-    %LOG% paket file selected: !pkg_file!
+    %LOG% [USER INPUT] paket file selected: !pkg_file!
 ) ELSE goto menu_pilih_paket
 
 
@@ -318,7 +346,6 @@ FOR /L %%A IN (1,1,%pkg_length%) DO (
     IF !pkg_item_%%A_exit_code! NEQ 0 (SET /A fail_count+=1)
     CALL:doProgress "!pkg_item_%%A!"
     
-    
 )
 echo.
 
@@ -388,6 +415,9 @@ FOR /L %%A IN (1,1,%pkg_length%) DO (
         REM CALL:str_color "!pkg_item_%%A.desc! !fill_char!" tmp_str
     REM ) ELSE SET "tmp_str=!pkg_item_%%A.desc! !fill_char!"
     SET "tmp_str=!pkg_item_%%A.desc! !fill_char!"
+    IF !pkg_item_%%A.status_code! NEQ 0 (
+        call:str_color "!tmp_str!" %COLOR_RED% tmp_str
+    )
     SET "pkg_item_%%A_in_menu_text=!tmp_str! !pkg_item_%%A.status!"
     
 )
@@ -408,7 +438,8 @@ echo %hh%:%mm%:%ss%,%cc%
 REM pause
 EXIT /B
 
-
+REM ----------------------------------------------------------------------
+REM WAIT FOR BACKGROUND INSTALLATION
 :wait_bg_install
 SET /A "delay=1"
 
@@ -458,7 +489,7 @@ FOR /L %%A IN (1,1,%bg_proc_num%) DO (
         SET "bg_proc_%%A_status=!stats!"
     )
 )
-IF %new_num_finished% EQU %bg_proc_num% goto:wait_bg_install__end
+
 REM IF not the first time and new status is different from before
 REM display background installation status
 SET /A "bool=0"
@@ -472,6 +503,7 @@ IF %bool% EQU 1 (
     )
     echo.
 )
+IF %num_finished% EQU %bg_proc_num% goto:wait_bg_install__end
 ping /n %act_delay% 127.0.0.1>nul
 goto:wait_bg_install_loop
 
@@ -714,6 +746,55 @@ REM Function body
     EXIT /B %exit_code%
 )
 
+REM ==================================================================================
+REM GET APP'S INSTALLATION CONFIGURATION
+:get_appcfg IniContentVar SectionName OutVar
+%ECHO_VERBOSE% Begin get_appcfg %*
+SetLocal EnableExtensions EnableDelayedExpansion
+SET "IniContentVar=%~1"
+SET "SectionName=%~1"
+SET "OutVar=%~1"
+
+IF DEFINED %OutVar%[%SectionName%] goto:get_appcfg__end
+
+SET "installer_dir=%script_path%\%SectionName%"
+SET "specific_windows_number="
+SET "specific_windows_bit="
+SET "installer_file="
+SET "wait="
+SET "param="
+SET "crack_dir="
+SET "crack_file="
+SET "crack_dst="
+SET "script="
+SET /A "cfg_status_code=0"
+SET "status="
+SET "desc=%section_name%"
+
+IF DEFINED %IniContentVar%[%SectionName%].installer_dir (
+    SET "installer_dir=!%IniContentVar%[%SectionName%].installer_dir!"
+    goto:get_appcfg__installer_dir__end
+)
+
+:get_appcfg__installer_dir__end
+
+:get_appcfg__end
+(ENDLOCAL & REM -- RETURN VALUES
+    IF "%OutVar%" NEQ "" (
+        SET "%OutVar%[%SectionName%].installer_dir=%cfg_installer_dir%"
+        SET "%OutVar%[%SectionName%].specific_windows_number=%cfg_specific_windows_number%"
+        SET "%OutVar%[%SectionName%].specific_windows_bit=%cfg_specific_windows_bit%"
+        SET "%OutVar%[%SectionName%].installer_file=%cfg_installer_file%"
+        SET "%OutVar%[%SectionName%].wait=%cfg_wait%"
+        SET "%OutVar%[%SectionName%].param=%cfg_param%"
+        SET "%OutVar%[%SectionName%].crack_file=%cfg_crack_file%"
+        SET "%OutVar%[%SectionName%].crack_dst=%cfg_crack_dst%"
+        SET "%OutVar%[%SectionName%].status=%cfg_status%"
+        SET "%OutVar%[%SectionName%].status_code=%cfg_status_code%"
+        SET "%OutVar%[%SectionName%].desc=%cfg_desc%"
+    )
+    EXIT /B %cfg_status_code%
+)
 
 REM ==================================================================================
 REM GET APP'S INSTALLATION CONFIGURATION
@@ -1200,7 +1281,7 @@ REM HEADER
     echo ;
     echo ; ==================================================================
     echo ;
-)> "%filename%"
+) > "%filename%"
 
 REM CONTENT
 (
@@ -1243,7 +1324,7 @@ REM CONTENT
     echo param_quiet=/quiet /norestart
     echo direct_download_url_32=https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise.msi
     echo direct_download_url_64=https://dl.google.com/dl/chrome/install/googlechromestandaloneenterprise64.msi
-    echo [Internet Download Manager IDM]
+    echo [Internet Download Manager Silent]
     echo param=/S /EN
     echo [Java]
     echo ; https://www.oracle.com/technetwork/java/javase/silent-136552.html
@@ -1257,23 +1338,41 @@ REM CONTENT
     echo [Microsoft .NET Framework]
     echo param=/passive /norestart
     echo param_quiet=/quiet /norestart
+    echo [Microsoft .NET Framework 4.8]
+    echo param=/passive /norestart
+    echo param_quiet=/quiet /norestart
     echo [Microsoft Office 2007 SP3]
     echo param=/adminfile basic.MSP
     echo wait=false
     echo [Microsoft Office 2016]
     echo param=/adminfile basic_all.MSP
     echo wait=false
+    echo [Microsoft Office Proofing Tools 2013]
+    echo param=/passive /norestart
+    echo param_quiet=/quiet /norestart
+    echo [Microsoft Office Proofing Tools 2016]
+    echo param=/passive /norestart
+    echo param_quiet=/quiet /norestart
     echo [Microsoft Visual C++ Redistributable]
     echo param=/passive /norestart
     echo param_quiet=/quiet /norestart
+    echo [Microsoft Visual C++ Redistributable All]
+    echo param=/S
     echo [Mozilla Firefox]
     echo param=-ms
-    echo direct_download_url_32=https://download.mozilla.org/?product=firefox-latest&os=win&lang=en-US
-    echo direct_download_url_64=https://download.mozilla.org/?product=firefox-latest&os=win64&lang=en-US
+    echo direct_download_url_32=https://download.mozilla.org/?product=firefox-latest^&os=win^&lang=en-US
+    echo direct_download_url_64=https://download.mozilla.org/?product=firefox-latest^&os=win64^&lang=en-US
     echo [MSI Afterburner]
     echo param=/S
     echo direct_download_url=http://download.msi.com/uti_exe/vga/MSIAfterburnerSetup.zip
     echo [Notepad++]
+    echo param=/S
+    echo [PowerShell Core]
+    echo param=/passive /norestart ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1 ENABLE_PSREMOTING=1 REGISTER_MANIFEST=1
+    echo param_quiet=/quiet /norestart ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1 ENABLE_PSREMOTING=1 REGISTER_MANIFEST=1
+    echo [Rainmeter]
+    echo param=/S
+    echo [Recuva]
     echo param=/S
     echo [Snappy Driver Installer]
     echo ; installer_file=SDI_auto.bat
@@ -1283,9 +1382,9 @@ REM CONTENT
     echo param=/S
     echo [WinRAR]
     echo param=/S /IEN
-)>> "%filename%"
+) >> "%filename%"
 
-IF NOT EXIST "%file_name%" (
+IF NOT EXIST "%filename%" (
     SET /A "exit_code=1"
     >&2 echo Can't create default INI file
 )
@@ -1307,7 +1406,7 @@ SET "new_pkg_desc=%~1"
 SET "new_pkg_file=%~2"
 
 SET /A "pkg_item_length=0"
-FOR /F "tokens=*" %%A in ('DIR "%search_folder%" /ad-h /B ^| findstr /v /r /c:"^\."') DO (
+FOR /F "tokens=*" %%A in ('DIR "%search_location%" /ad-h /B ^| findstr /v /r /c:"^\."') DO (
     SET /A pkg_item_length+=1
     SET pkg_item_!pkg_item_length!=%%A
     SET /A "pkg_item_!pkg_item_length!_selected=0"
@@ -1331,10 +1430,13 @@ IF NOT DEFINED pkg_item_%new_pkg_input% (
     IF "%new_pkg_input%"=="Y" goto :buat_paket__confirm
     IF "%new_pkg_input%"=="y" goto :buat_paket__confirm
 ) ELSE (
+    %LOG% [USER INPUT] %new_pkg_input%
     IF !pkg_item_%new_pkg_input%_selected! EQU 1 (
+        %LOG% Removed !pkg_item_%new_pkg_input%!
         SET /A "pkg_item_%new_pkg_input%_selected=0"
         SET "selected_pkg_buffer=!selected_pkg_buffer: %new_pkg_input% = !"
     ) ELSE (
+        %LOG% Added !pkg_item_%new_pkg_input%!
         SET /A "pkg_item_%new_pkg_input%_selected=1"
         SET "selected_pkg_buffer=%selected_pkg_buffer%%new_pkg_input% "
     )
@@ -1357,6 +1459,7 @@ echo.
 
 :buat_paket__nama_paket
 SET /P nama_paket="Nama Paket: "
+%LOG% [USER INPUT] Nama Paket: "%nama_paket%"
 IF "%nama_paket%"=="" goto:buat_paket__nama_paket
 SET "paket_file=%~dpn0.paket.%nama_paket%.txt"
 
@@ -1365,6 +1468,7 @@ SET "nama_paket_confirm=y"
 IF EXIST "%paket_file%" (
     CALL:str_color "Paket dengan nama %nama_paket% sudah ada. Lanjutkan [Y/n]" %COLOR_RED% nama_paket_confirm_text
     SET /P nama_paket_confirm="!nama_paket_confirm_text! "
+    %LOG% [USER INPUT] nama_paket_confirm=%nama_paket_confirm%
 )
 IF DEFINED nama_paket_confirm (
     IF "%nama_paket_confirm%"=="Y" goto:buat_paket__create_file
@@ -2051,7 +2155,7 @@ REM FOR /L %%G in (1,1,!%~1_num!) DO (
     REM )
 REM )
 :remove_array_item__end
-pause
+
 Exit /B
 
 :format_num num retvar
@@ -2237,52 +2341,54 @@ for /f "tokens=*" %%A in ('findstr "adalah"') do (
 )
 
 :create_example_folder_structure
-echo Creating Folder structure example on %search_folder%
+echo Creating Folder structure example on %search_location%
 SET "ini_key_for_download=direct_download_url"
 SET "ini_key_for_download_32=direct_download_url_32"
 SET "ini_key_for_download_64=direct_download_url_64"
 
-SET "command=SET ini.section[ ^| findstr /RC:"^ini\.section\[[0-9][0-9]*\]=""
+SET "command=SET IniContent.section[ ^| findstr /RC:"^IniContent\.section\[[0-9][0-9]*\]=""
 FOR /F "tokens=1* delims==" %%G in ('%command%') DO (
     SET "section=%%H"
 
     REM 32/64
-    SET "shortcut_dir=%search_folder%\!section!"
+    SET "shortcut_dir=%search_location%\!section!"
     SET "ini_key=%ini_key_for_download%"
-    IF DEFINED ini.section[!section!].!ini_key! (
+    IF DEFINED IniContent.section[!section!].!ini_key! (
         IF NOT EXIST "!shortcut_dir!" MD "!shortcut_dir!"
         SET "shortcut_file=!shortcut_dir!\!ini_key!.url"
-        CALL SET "url=%%ini.section[!section!].!ini_key!%%"
+        CALL SET "url=%%IniContent.section[!section!].!ini_key!%%"
         echo Creating shortcut for !section!
         call:create_shortcut "!shortcut_file!" "!url!"
     )
 
     REM 32
-    SET "shortcut_dir=%search_folder%\!section!\32"
+    SET "shortcut_dir=%search_location%\!section!\32"
     SET "ini_key=%ini_key_for_download_32%"
-    IF DEFINED ini.section[!section!].!ini_key! (
+    IF DEFINED IniContent.section[!section!].!ini_key! (
         IF NOT EXIST "!shortcut_dir!" MD "!shortcut_dir!"
         SET "shortcut_file=!shortcut_dir!\!ini_key!.url"
-        CALL SET "url=%%ini.section[!section!].!ini_key!%%"
+        CALL SET "url=%%IniContent.section[!section!].!ini_key!%%"
         echo Creating shortcut for !section!
         call:create_shortcut "!shortcut_file!" "!url!"
     )
 
     REM 64
-    SET "shortcut_dir=%search_folder%\!section!\64"
+    SET "shortcut_dir=%search_location%\!section!\64"
     SET "ini_key=%ini_key_for_download_64%"
-    IF DEFINED ini.section[!section!].!ini_key! (
+    IF DEFINED IniContent.section[!section!].!ini_key! (
         IF NOT EXIST "!shortcut_dir!" MD "!shortcut_dir!"
         SET "shortcut_file=!shortcut_dir!\!ini_key!.url"
-        CALL SET "url=%%ini.section[!section!].!ini_key!%%"
+        CALL SET "url=%%IniContent.section[!section!].!ini_key!%%"
         echo Creating shortcut for !section!
         call:create_shortcut "!shortcut_file!" "!url!"
     )
 )
 
-REM md "%search_folder%\VLC Media Player"
-REM call:create_shortcut "%search_folder%\VLC Media Player\test.url" "http://www.google.com"
+REM md "%search_location%\VLC Media Player"
+REM call:create_shortcut "%search_location%\VLC Media Player\test.url" "http://www.google.com"
 exit /b
+
+
 
 :get_url_from_shortcut shortcut_file out_var
 FOR /F "tokens=1* delims==" %%A in ('findstr /LIBC:"URL=" "%~1"') DO (
