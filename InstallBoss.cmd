@@ -94,6 +94,8 @@ SET "LOG=1>> %log_file% echo"
 SET "LOG_ERR=2>> %log_file% echo"
 SET "LOG_RAW=1>&%STREAM_HANDLE_FOR_LOG%"
 
+
+
 REM ====================================================================
 REM INIT
 
@@ -112,7 +114,7 @@ CALL:get_windows_bit windows_bit
 REM Check administrator
 net session >nul 2>&1
 if %ERRORLEVEL% NEQ 0 (
-    call:echo_color_nonewline "WARNING" %COLOR_YELLOW% 
+    call:echo_color_nonewline "WARNING " %COLOR_YELLOW% 
     echo Script not running as Administrator ^^!
     echo Some app require administrator rights to be installed.
     echo.
@@ -129,32 +131,23 @@ if %ERRORLEVEL% NEQ 0 (
 
 REM Check INI file
 IF NOT EXIST "%params_ini_file%" (
-    echo creating default params file . . .
+    echo creating default INI file . . .
     %LOG% Creating default INI file
     CALL:create_default_ini_file "%params_ini_file%"
 )
 
+echo Loading INI file . . .
 call:get_ini_content "%params_ini_file%" IniContent
+echo.
 REM set IniContent
-call:get_appcfg IniContent "Google Chrome" AppCfg
-REM set AppCfg
-REM pause
+REM echo.
+REM echo.
+REM SET key=Winrar kosong
+REM call:copy_var "IniContent[%key%]" "AppCfg[%key%]"
+REM set "AppCfg[%key%]"
+
+REM pause 
 REM exit /b
-
-REM ====================================================================
-REM MAIN
-CALL:main
-:end
-REM.-- End of application
-REM FOR /l %%a in (5,-1,1) do (TITLE %title% -- closing in %%as&ping -n 2 -w 1 127.0.0.1>NUL)
-REM TITLE Press any key to close the application
-ECHO.
-pause
-EXIT /B
-
-REM ====================================================================
-REM MAIN
-:main
 
 REM TODO Detect first run
 SET /A "folder_found=0"
@@ -168,6 +161,61 @@ IF %folder_found% EQU 0 (
         call:create_example_folder_structure
     )
 )
+
+REM Load All AppCfg in search_location
+echo Loading App's Configuration . . .
+DIR "%search_location%" /A:D-H /O:N /B | findstr /v /r /c:"^[.]">"%paket_semua_folder_file%"
+%ECHO_VERBOSE% Load All AppCfg in %search_location%
+FOR /F "delims=" %%G in ('type "%paket_semua_folder_file%"') DO (
+    REM CALL:get_app_inst_cfg "%params_ini_file%" "%%G" AppCfg[%%G]
+    call:get_appcfg IniContent "%%G" AppCfg
+)
+REM SET AppCfg
+REM pause
+
+
+
+REM Calculate string length of All App's name in search_location
+REM %ECHO_VERBOSE% Calculating String length 
+REM SET "AppName.MaxLength=0"
+REM SET "string_length="
+REM FOR /F "delims=" %%G in ('type "%paket_semua_folder_file%"') DO (
+REM     CALL:strLen "%%G" string_length
+REM     IF !string_length! GTR !AppName.MaxLength! SET "AppName.MaxLength=!string_length!"
+REM     SET "AppName[%%G].StringLength=!string_length!"
+REM )
+REM set AppName
+
+REM %ECHO_VERBOSE% Preparing Line String
+REM call:init_line_string - 50 LINE_STRING
+REM Set LINE_STRING
+REM pause
+
+REM set AppCfg
+REM pause
+REM exit /b
+
+REM ====================================================================
+REM MAIN
+CALL:main
+:end
+REM.-- End of application
+REM FOR /l %%a in (5,-1,1) do (TITLE %title% -- closing in %%as&ping -n 2 -w 1 127.0.0.1>NUL)
+REM TITLE Press any key to close the application
+ECHO.
+
+REM Check wether script launched from console or explorer
+SET /A "interactive=0"
+ECHO %CMDCMDLINE%| FINDSTR /LXC:"\"%COMSPEC%\" "
+IF %ERRORLEVEL% EQU 0 SET /A "interactive=1"
+IF %interactive% NEQ 1 pause
+
+EXIT /B
+
+REM ====================================================================
+REM MAIN
+:main
+
 
 REM ====================================================================
 REM MAIN MENU
@@ -341,7 +389,8 @@ FOR /L %%A IN (1,1,%pkg_length%) DO (
     REM CALL:install "!pkg_item_%%A!"
     REM CALL:install_2 "!pkg_item_%%A!" pkg_item_%%A
     echo [%%A/%pkg_length%]
-    CALL:install_2 "!pkg_item_%%A!" pkg_item_%%A.
+    REM CALL:install_2 "!pkg_item_%%A!" pkg_item_%%A.
+    CALL:install_2 "!pkg_item_%%A!" "AppCfg[!pkg_item_%%A!]"
     echo.
     SET /A "pkg_item_%%A_exit_code=!errorlevel!"
     IF !pkg_item_%%A_exit_code! NEQ 0 (SET /A fail_count+=1)
@@ -396,21 +445,36 @@ CALL:echo_verbose 1 "Loading INI file . . ."
 FOR /L %%A IN (1,1,%pkg_length%) DO (
     CALL:echo_verbose 2 "Getting configuration for !pkg_item_%%A!"
     CALL:get_app_inst_cfg "%params_ini_file%" "!pkg_item_%%A!" pkg_item_%%A
+    REM IF "!AppCfg[%%A]!" EQU "" (
+    REM     CALL:get_app_inst_cfg "%params_ini_file%" "!pkg_item_%%A!" pkg_item_%%A AppCfg[%%A]
+    REM )
 )
 
 CALL:echo_verbose 1 "Preparing menu display . . ."
+REM set AppName[
 REM Get longest string
 SET /A longest_str_len=0
-FOR /L %%A IN (1,1,%pkg_length%) DO (
-    CALL:strLen "!pkg_item_%%A.desc!" str_len
-    SET /A "pkg_item_%%A_str_len=!str_len!"
-    IF !str_len! GTR !longest_str_len! SET /A "longest_str_len=!str_len!"
+FOR /L %%G IN (1,1,%pkg_length%) DO (
+    CALL:strLen "!pkg_item_%%G.desc!" str_len
+    REM set app_name=!pkg_item_%%G.desc!
+    REM CALL SET "str_len=%%AppName[%%app_name%%].StringLength%%"
+    SET /a "pkg_item_%%G_str_len=!str_len!"
+    IF !str_len! GTR !longest_str_len! SET /a "longest_str_len=!str_len!"
+    REM ECHO app_name !app_name!
+    REM echo str_len !str_len!
+    REM @echo on
+    REM call echo %AppName[%%app_name%%].StringLength%
+    REM call echo %%AppName[%%app_name%%].StringLength%%
+    REM call echo !AppName[%%app_name%%].StringLength!
+    REM @echo off
 )
-SET /A max_char=longest_str_len+3
+SET /A "max_char=longest_str_len+3"
+REM echo longest_str_len %longest_str_len%
 REM Fill char
 SET "tmp_str="
 FOR /L %%A IN (1,1,%pkg_length%) DO (
-    SET /A fill_char_count=max_char-!pkg_item_%%A_str_len!
+    SET "str_len=!pkg_item_%%A_str_len!""
+    SET /A "fill_char_count=max_char-str_len"
     CALL:repeat_char - !fill_char_count! fill_char
     REM IF !pkg_item_%%A.status_code! NEQ 0 (
         REM CALL:str_color "!pkg_item_%%A.desc! !fill_char!" tmp_str
@@ -436,7 +500,7 @@ if %mm% lss 10 set mm=0%mm%
 if %ss% lss 10 set ss=0%ss%
 if %cc% lss 10 set cc=0%cc%
 echo %hh%:%mm%:%ss%,%cc%
-REM pause
+pause
 EXIT /B
 
 REM ----------------------------------------------------------------------
@@ -747,41 +811,141 @@ REM Function body
     EXIT /B %exit_code%
 )
 
-REM ==================================================================================
-REM GET APP'S INSTALLATION CONFIGURATION
 :get_appcfg IniContentVar SectionName OutVar
-%ECHO_VERBOSE% Begin get_appcfg %*
+REM ==================================================================================
+REM FUNCTION GET APP'S INSTALLATION CONFIGURATION
+REM - version 1.0
+REM - desc : Get App's Installation Configuration
+REM - params:
+REM     -- [IN]     base_dir		 - Directory to search
+REM     -- [IN]     regex			 - regex of findstr command
+REM     -- [OUT]    retvar			 - Var to store Return Value.
+
+IF "%ECHO_VERBOSE%" NEQ "" %ECHO_VERBOSE% Begin get_appcfg %*
 SetLocal EnableExtensions EnableDelayedExpansion
+
 SET "IniContentVar=%~1"
-SET "SectionName=%~1"
-SET "OutVar=%~1"
+SET "SectionName=%~2"
+SET "OutVar=%~3"
 
-IF DEFINED %OutVar%[%SectionName%] goto:get_appcfg__end
+SET "SectionVar=%IniContentVar%[%SectionName%]"
 
-SET "installer_dir=%script_path%\%SectionName%"
-SET "specific_windows_number="
-SET "specific_windows_bit="
-SET "installer_file="
-SET "wait="
-SET "param="
-SET "crack_dir="
-SET "crack_file="
-SET "crack_dst="
-SET "extra_script="
+REM IF DEFINED %OutVar%[%SectionName%] goto:get_appcfg__end
+
+SET "cfg_installer_dir=!%SectionVar%[installer_dir]!"
+SET "cfg_specific_windows_number="
+SET "cfg_specific_windows_bit="
+SET "cfg_installer_file=!%SectionVar%[installer_file]!"
+SET "cfg_wait=!%SectionVar%[wait]!"
+SET "cfg_param=!%SectionVar%[param]!"
+SET "cfg_param_quiet=!%SectionVar%[param_quiet]!"
+SET "cfg_crack_dir=!%SectionVar%[crack_dir]!"
+SET "cfg_crack_file=!%SectionVar%[crack_file]!"
+SET "cfg_crack_dst=!%SectionVar%[crack_dst]!"
+SET "cfg_extra_script=!%SectionVar%[extra_script]!"
 SET /A "cfg_status_code=0"
-SET "status="
-SET "desc=%section_name%"
+SET "cfg_status="
+SET "cfg_desc=%SectionName%"
 
-IF DEFINED %IniContentVar%[%SectionName%].installer_dir (
-    SET "installer_dir=!%IniContentVar%[%SectionName%].installer_dir!"
-    goto:get_appcfg__installer_dir__end
+:get_appcfg__installer_dir
+IF DEFINED cfg_installer_dir (
+    REM If not absolute path
+    set "char=%cfg_installer_dir:~1,1%"
+    IF "!char!" NEQ ":" (
+        SET "installer_dir=%search_location%\%SectionName%\%installer_dir%"
+    )
+    IF NOT EXIST "!cfg_installer_dir!" (
+        rem installer_dir not found
+        %LOG% Specified installer_dir not found: !cfg_installer_dir!
+        SET /A "cfg_status_code=1"
+        SET "cfg_status=Specified Folder Not Found"
+        goto:get_appcfg__end
+    )
+) ELSE (
+    SET "cfg_installer_dir=%search_location%\%SectionName%"
+    IF NOT EXIST "!cfg_installer_dir!" (
+        rem installer_dir not found
+        %LOG% installer_dir not found: !cfg_installer_dir!
+        SET /A "cfg_status_code=1"
+        SET "cfg_status=Folder Not Found"
+        goto:get_appcfg__end
+    )
 )
 
-:get_appcfg__installer_dir__end
+REM Specific Win7 Win8 Win10 folder
+IF EXIST "%cfg_installer_dir%\Win %windows_number%" (
+    SET "cfg_installer_dir=%cfg_installer_dir%\Win %windows_number%"
+    SET "cfg_specific_windows_number=%windows_number%"
+    SET "cfg_desc=%cfg_desc% [Win %windows_number%]"
+)
+
+REM Specific 32 64 folder
+IF %windows_bit% EQU 32 (SET /A "windows_bit_inverse=64") ELSE SET /A "windows_bit_inverse=32"
+SET "cfg_specific_windows_bit="
+SET /A "other_win_bit_found=0"
+IF EXIST "%cfg_installer_dir%\%windows_bit%" (
+    SET "cfg_installer_dir=%cfg_installer_dir%\%windows_bit%"
+    SET "cfg_specific_windows_bit=%windows_bit%"
+    SET "cfg_desc=%cfg_desc% [%windows_bit%-bit]"
+) ELSE IF EXIST "%cfg_installer_dir%\%windows_bit_inverse%" SET /A "other_win_bit_found=1"
+
+REM Installer File
+SET "tmp_cfg_installer_file="
+IF DEFINED cfg_installer_file (
+    REM Check absolute path
+    set "char=%cfg_installer_file:~1,1%"
+    IF "!char!" NEQ ":" (
+        rem relative path
+        SET "cfg_installer_file=%installer_dir%\%cfg_installer_file%"
+    )
+    IF NOT EXIST "!cfg_installer_file!" (
+        %LOG% Specified installer_file not found: !cfg_installer_file!
+        SET /A "cfg_status_code=1"
+        SET "cfg_status=Specified Installer File Not Found"
+        goto:get_appcfg__end
+    )
+) ELSE (
+    %LOG% Searching Installer file
+    CALL:search_installer_file "%cfg_installer_dir%" cfg_installer_file
+    IF !ERRORLEVEL! NEQ 0 (
+        %LOG% Can't find any
+        SET /A "cfg_status_code=3"
+        SET "cfg_status=Installer File Not Found"
+        REM CALL:str_color "INSTALLER FILE NOT FOUND" %COLOR_RED% cfg_status
+        goto:get_appcfg__end
+    ) ELSE (
+        %LOG% Found !cfg_installer_file!
+    )
+)
+
+REM Default is true
+IF /I "%cfg_wait%" EQU "false" (
+    SET "cfg_wait=false"
+) ELSE SET "cfg_wait=true"
+
+REM Parameter
+IF NOT DEFINED cfg_param (
+    call:get_default_param "%cfg_installer_file%" cfg_param
+    IF "!cfg_param!" EQU "" (
+        %LOG% No Params
+        SET /A "cfg_status_code=3"
+        SET "cfg_status=No Parameter"
+        REM CALL:str_color "PARAM NOT SPECIFIED" %COLOR_RED% cfg_status
+        goto:get_appcfg__end
+    )
+)
+
+IF NOT DEFINED cfg_crack_dst (
+    SET "cfg_crack_dst=%ProgramFiles%\%SectionName%"
+)
+IF NOT EXIST "%cfg_crack_dst%" (
+    rem TODO
+)
 
 :get_appcfg__end
 (ENDLOCAL & REM -- RETURN VALUES
     IF "%OutVar%" NEQ "" (
+        SET "%OutVar%[%SectionName%].is_loaded=1"
         SET "%OutVar%[%SectionName%].installer_dir=%cfg_installer_dir%"
         SET "%OutVar%[%SectionName%].specific_windows_number=%cfg_specific_windows_number%"
         SET "%OutVar%[%SectionName%].specific_windows_bit=%cfg_specific_windows_bit%"
@@ -796,6 +960,18 @@ IF DEFINED %IniContentVar%[%SectionName%].installer_dir (
     )
     EXIT /B %cfg_status_code%
 )
+
+:get_default_param file OutVar
+SetLocal EnableExtensions EnableDelayedExpansion
+Set "file=%~1"
+
+SET "result="
+IF /I "%file:~-7%" EQU "msi" SET "result=/passive /norestart"
+(ENDLOCAL & REM -- RETURN VALUES
+    IF "%~2" NEQ "" SET "%~2=%result%"
+    EXIT /B
+)
+
 
 REM ==================================================================================
 REM GET APP'S INSTALLATION CONFIGURATION
@@ -918,6 +1094,7 @@ IF %cfg_status_code% NEQ 0 (
 )
 (ENDLOCAL & REM -- RETURN VALUES
     IF "%retvar%" NEQ "" (
+        SET "%retvar%=1"
         SET "%retvar%.installer_dir=%cfg_installer_dir%"
         SET "%retvar%.specific_windows_number=%cfg_specific_windows_number%"
         SET "%retvar%.specific_windows_bit=%cfg_specific_windows_bit%"
@@ -1586,6 +1763,14 @@ echo.%~1 >&2
 Exit /b
 
 REM ==================================================================================
+REM INIT LINE STRING
+:init_line_string char num OutVar
+FOR /L %%G in (1,1,%~2) do (
+    call:repeat_char %~1 %%G "%~3[%%G]"
+)
+Exit /b
+
+REM ==================================================================================
 REM INIT COLOR CODE
 :init_color_code
 SET COLOR_BLACK=30
@@ -2102,23 +2287,60 @@ FOR /F "delims=" %%G in ('certutil -hashfile "%~1" sha256 ^| findstr /LV "hash C
 )
 EXIT /B
 
+:copy_var src_var dst_var
+%ECHO_VERBOSE% :copy_var %*
+SET "src_var=%~1"
+SET "dst_var=%~2"
+REM SET "command=SET "%src_var%""
+SET "command=SET %src_var%^| findstr /LIBC:"%src_var%""
+FOR /F "tokens=1* delims==" %%G in ('%command%') DO (
+    SET "var_name=%%G"
+    SET "attr_name=!var_name:%src_var%=!"
+    SET "%dst_var%!attr_name!=%%H"
+)
+exit /b
 
 :get_ini_content file outVar
+REM Example 1:
+REM     To acces key's value:
+REM     get_ini_content "config.ini" IniContent
+REM     echo %IniContent[section][key]%
+REM Example 2:
+REM     To loop through all section:
+REM     get_ini_content "config.ini" IniContent
+REM     FOR /L %%G in (1,1,%IniContent.section.length%) do (
+REM         echo !IniContent.section[%%G]!
+REM     )
+REM Example 3:
+REM     To loop through all keys in section:
+REM     get_ini_content "config.ini" IniContent
+REM     SET section=section name
+REM     FOR /L %%G in (1,1,!IniContent[%section%].key.length!) do (
+REM         echo key %%G: !IniContent[%section%].key[%%G]!
+REM     )
 SET /A "section_num=0"
+SET /A "key_num=0"
 SET "section=NO_SECTION"
+SET "key="
 FOR /F "delims=" %%G in ('type "%~1"') DO (
     set "line=%%G"
     IF "!line:~0,1!" EQU ";" (
-        REM DO nothing. comment
+        REM DO nothing comment
     ) ELSE IF "!line:~0,1!" EQU "[" (
         SET /A "section_num=section_num+1"
-        REM FOR /F "delims=[]" %%g in ("!line!") DO SET %~2.section[!section_num!]=%%g
+        SET /A "key_num=0"
         FOR /F "delims=[]" %%g in ("!line!") DO (
             SET "section=%%g"
             SET "%~2.section[!section_num!]=!section!"
+            SET "%~2[!section!].key.length=!key_num!"
         )
     ) ELSE (
-        FOR /F "tokens=1* delims==" %%g in ("!line!") DO ( SET "%~2.section[!section!].%%g=%%h")
+        FOR /F "tokens=1* delims==" %%g in ("!line!") DO (
+            SET /A "key_num=key_num+1"
+            SET "%~2[!section!][%%g]=%%h"
+            SET "%~2[!section!].key[!key_num!]=%%g"
+            SET "%~2[!section!].key.length=!key_num!"
+        )
     )
 )
 SET /A "%~2.section.length=%section_num%"
@@ -2179,6 +2401,14 @@ EXIT /b
 Setlocal EnableDelayedExpansion
              REM -- String  The string to be measured, surround in quotes if it contains spaces.
              REM -- RtnVar  An optional variable to be used to return the string length.
+REM %ECHO_VERBOSE% :strLen %*
+rem use chace
+IF "!strLen_chace[%~1]!" NEQ "" (
+    set len=!strLen_chace[%~1]!
+    REM %ECHO_VERBOSE% Using chace !strLen_chace[%~1]!
+    goto:strLen__end
+)
+
 Set "s=#%~1"
 Set "len=0"
 For %%N in (4096 2048 1024 512 256 128 64 32 16 8 4 2 1) do (
@@ -2187,7 +2417,11 @@ For %%N in (4096 2048 1024 512 256 128 64 32 16 8 4 2 1) do (
     set "s=!s:~%%N!"
   )
 )
-Endlocal&if "%~2" neq "" (set /A "%~2=%len%") else echo %len%
+:strLen__end
+Endlocal&if "%~2" neq "" (
+    set "%~2=%len%"
+    set "strLen_chace[%~1]=%len%"
+    ) else echo %len%
 Exit /b
 
 :count_lines files retvar
@@ -2215,8 +2449,8 @@ SET "char=%~1"
 SET "count=%~2"
 SET "retvar=%~3"
 SET "result="
-IF DEFINED repeat_char_%char%_%count% (
-    SET "result=!repeat_char_%char%_%count%!"
+IF DEFINED repeat_char_chace[%char%][%count%] (
+    SET "result=!repeat_char_chace[%char%][%count%]!"
 ) ELSE (
     FOR /L %%A in (1,1,%count%) do (
         SET "result=!result!%char%"
@@ -2227,7 +2461,7 @@ REM FOR /L %%A in (1,1,%count%) do (
 REM )
 (ENDLOCAL & REM -- RETURN VALUES
     IF "%retvar%" NEQ "" SET "%retvar%=%result%"
-    SET "repeat_char_%char%_%count%=%result%"
+    SET "repeat_char_chace[%char%][%count%]=%result%"
     REM IF "%new_pkg_file%" NEQ "" SET "%new_pkg_file%=%paket_file%"
 )
 EXIT /B %errorlevel%
@@ -2354,10 +2588,10 @@ FOR /F "tokens=1* delims==" %%G in ('%command%') DO (
     REM 32/64
     SET "shortcut_dir=%search_location%\!section!"
     SET "ini_key=%ini_key_for_download%"
-    IF DEFINED IniContent.section[!section!].!ini_key! (
+    IF DEFINED IniContent[!section!][!ini_key!] (
         IF NOT EXIST "!shortcut_dir!" MD "!shortcut_dir!"
         SET "shortcut_file=!shortcut_dir!\!ini_key!.url"
-        CALL SET "url=%%IniContent.section[!section!].!ini_key!%%"
+        CALL SET "url=%%IniContent[!section!][!ini_key!]%%"
         echo Creating shortcut for !section!
         call:create_shortcut "!shortcut_file!" "!url!"
     )
@@ -2365,10 +2599,10 @@ FOR /F "tokens=1* delims==" %%G in ('%command%') DO (
     REM 32
     SET "shortcut_dir=%search_location%\!section!\32"
     SET "ini_key=%ini_key_for_download_32%"
-    IF DEFINED IniContent.section[!section!].!ini_key! (
+    IF DEFINED IniContent[!section!][!ini_key!] (
         IF NOT EXIST "!shortcut_dir!" MD "!shortcut_dir!"
         SET "shortcut_file=!shortcut_dir!\!ini_key!.url"
-        CALL SET "url=%%IniContent.section[!section!].!ini_key!%%"
+        CALL SET "url=%%IniContent[!section!][!ini_key!]%%"
         echo Creating shortcut for !section!
         call:create_shortcut "!shortcut_file!" "!url!"
     )
@@ -2376,10 +2610,10 @@ FOR /F "tokens=1* delims==" %%G in ('%command%') DO (
     REM 64
     SET "shortcut_dir=%search_location%\!section!\64"
     SET "ini_key=%ini_key_for_download_64%"
-    IF DEFINED IniContent.section[!section!].!ini_key! (
+    IF DEFINED IniContent[!section!][!ini_key!] (
         IF NOT EXIST "!shortcut_dir!" MD "!shortcut_dir!"
         SET "shortcut_file=!shortcut_dir!\!ini_key!.url"
-        CALL SET "url=%%IniContent.section[!section!].!ini_key!%%"
+        CALL SET "url=%%IniContent[!section!][!ini_key!]%%"
         echo Creating shortcut for !section!
         call:create_shortcut "!shortcut_file!" "!url!"
     )
@@ -2393,39 +2627,39 @@ exit /b
 
 :get_url_from_shortcut shortcut_file out_var
 FOR /F "tokens=1* delims==" %%A in ('findstr /LIBC:"URL=" "%~1"') DO (
-	SET "%~2=%%B"
+    SET "%~2=%%B"
 )
 exit /b
 
 :construct_html_init file
 (
-	echo ^<^^!doctype html^>
-	echo ^<html lang="en"^>
-	echo   ^<head^>
-	echo     ^<meta charset="utf-8"^>
-	echo     ^<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"^>
-	echo     ^<title^>Links^</title^>
-	echo   ^</head^>
-	echo   ^<body^>
-	echo   ^<h1^> Scanned Links ^</h1^>
+    echo ^<^^!doctype html^>
+    echo ^<html lang="en"^>
+    echo   ^<head^>
+    echo     ^<meta charset="utf-8"^>
+    echo     ^<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"^>
+    echo     ^<title^>Links^</title^>
+    echo   ^</head^>
+    echo   ^<body^>
+    echo   ^<h1^> Scanned Links ^</h1^>
 
 ) > "%~1"
 exit /b
 
 :construct_html_insert_link file a_href a_text
 (
-	echo     ^<strong^>
-	echo     ^<a target="_blank" href="%~2"^>
-	echo       %~3
-	echo     ^</a^>
-	echo     ^</strong^>
-	echo     ^<br^>
-	echo     ^<br^>
+    echo     ^<strong^>
+    echo     ^<a target="_blank" href="%~2"^>
+    echo       %~3
+    echo     ^</a^>
+    echo     ^</strong^>
+    echo     ^<br^>
+    echo     ^<br^>
 ) >> "%~1"
 exit /b
 
 :construct_html_end file
 (
-	echo   ^</body^>
-	echo ^</html^>
+    echo   ^</body^>
+    echo ^</html^>
 ) >> "%~1"
