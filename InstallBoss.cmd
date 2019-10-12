@@ -1,6 +1,10 @@
 @echo off
 REM https://github.com/asfahann/InstallBoss/releases/latest
 
+REM TODO 1: Fix install_2 without check status (unprepared cfg), will install without waiting anyway
+REM TODO 2: Fix double echo on error
+REM TODO 3: Fix Fail Report Numbering
+
 REM.-- Prepare the Command Processor
 SETLOCAL ENABLEEXTENSIONS
 SETLOCAL ENABLEDELAYEDEXPANSION
@@ -73,8 +77,12 @@ DEL /Q "%tmp_folder%\*"
 
 REM ====================================================================
 REM USER SETTINGS
-SET "search_location=%~dp0"
-SET search_location=%search_location:~0,-1%
+SET "search_location=%~1"
+IF NOT DEFINED search_location (
+    SET "search_location=%~dp0"
+    SET search_location=!search_location:~0,-1!
+)
+SET /A "preload_app_cfg=0"
 SET "SETTINGS_VERBOSE_LEVEL=5"
 SET "default_msi_param=/passive /norestart"
 
@@ -121,8 +129,6 @@ if %ERRORLEVEL% NEQ 0 (
     SET input_confirm=Y
     SET /P input_confirm="Restart as administrator [Y/n] ? "
     IF /I "!input_confirm!"=="Y" (
-        REM echo start "Restarting as administrator" /D "%CD%" /MIN powershell -command Start-Process -FilePath "%script_fullname%" -WorkingDirectory "%CD%" -Verb RunAs
-        REM pause
         start "Restarting as administrator" /D "%CD%" /MIN powershell -command "& {Start-Process -FilePath '%script_fullname%' -WorkingDirectory '%CD%' -Verb RunAs}"
         exit /b
     )
@@ -139,15 +145,6 @@ IF NOT EXIST "%params_ini_file%" (
 echo Loading INI file . . .
 call:get_ini_content "%params_ini_file%" IniContent
 echo.
-REM set IniContent
-REM echo.
-REM echo.
-REM SET key=Winrar kosong
-REM call:copy_var "IniContent[%key%]" "AppCfg[%key%]"
-REM set "AppCfg[%key%]"
-
-REM pause 
-REM exit /b
 
 REM TODO Detect first run
 SET /A "folder_found=0"
@@ -162,18 +159,15 @@ IF %folder_found% EQU 0 (
     )
 )
 
-REM Load All AppCfg in search_location
-echo Loading App's Configuration . . .
-DIR "%search_location%" /A:D-H /O:N /B | findstr /v /r /c:"^[.]">"%paket_semua_folder_file%"
-%ECHO_VERBOSE% Load All AppCfg in %search_location%
-FOR /F "delims=" %%G in ('type "%paket_semua_folder_file%"') DO (
-    REM CALL:get_app_inst_cfg "%params_ini_file%" "%%G" AppCfg[%%G]
-    call:get_appcfg IniContent "%%G" AppCfg
+rem Load All AppCfg in search_location
+IF %preload_app_cfg% EQU 1 (
+    echo Loading App's Configuration . . .
+    DIR "%search_location%" /A:D-H /O:N /B | findstr /v /r /c:"^[.]">"%paket_semua_folder_file%"
+    %ECHO_VERBOSE% Load All AppCfg in %search_location%
+    FOR /F "delims=" %%G in ('type "%paket_semua_folder_file%"') DO (
+        call:get_appcfg IniContent "%%G" AppCfg
+    )
 )
-REM SET AppCfg
-REM pause
-
-
 
 REM Calculate string length of All App's name in search_location
 REM %ECHO_VERBOSE% Calculating String length 
@@ -204,7 +198,7 @@ REM FOR /l %%a in (5,-1,1) do (TITLE %title% -- closing in %%as&ping -n 2 -w 1 1
 REM TITLE Press any key to close the application
 ECHO.
 
-REM Check wether script launched from console or explorer
+REM If script launched from explorer, pause
 SET /A "interactive=0"
 ECHO %CMDCMDLINE%| FINDSTR /LXC:"\"%COMSPEC%\" "
 IF %ERRORLEVEL% EQU 0 SET /A "interactive=1"
@@ -221,34 +215,62 @@ REM ====================================================================
 REM MAIN MENU
 SET "menu_item_prefix=   "
 
-:menu_pilih_paket
+REM :menu_pilih_paket
+:scan_paket
 SET "pkgs_num=0"
 SET /A "PaketInstall.Length=0"
 SET "tmp_nama_paket="
 SET "tmp_file_name="
 %LOG% Searching paket files
-FOR /F "tokens=*" %%A in ('dir "%script_path%" /b /a-d /od ^| findstr /i /r /c:"^%script_base_name%\.paket\..*\.txt$"') do (
+FOR /F "tokens=*" %%G in ('dir "%script_path%" /b /a-d /od ^| findstr /i /r /c:"^%script_base_name%\.paket\..*\.txt$"') do (
     SET /A pkgs_num+=1
     SET /A "PaketInstall.Length+=1"
-    SET "tmp_pkgs_filename=%%~nA"
+    SET "tmp_pkgs_filename=%%~nG"
     SET "tmp_pkgs_desc=!tmp_pkgs_filename:%script_base_name%.paket.=!"
     SET "tmp_nama_paket="
-    SET "pkgs_!pkgs_num!_file=%%~A"
+    SET "pkgs_!pkgs_num!_file=%%~G"
     SET "pkgs_!pkgs_num!_desc=Paket !tmp_pkgs_desc!"
-    SET PaketInstall[!PaketInstall.Length!].File=%%~A
-    SET PaketInstall[!PaketInstall.Length!].Name=%%~A
+    
+    
+    REM SET "PaketInstall['%%G']=!pkgs_num!"
+    REM SET "PaketInstall[!pkgs_num!]=%%G"
+    REM SET "items_num=0"
+    REM FOR /F "delims=" %%g in ('type "%%~fG"') DO (
+    REM     SET /A "items_num+=1"
+    REM     SET "PaketInstall[!pkgs_num!].Items[!items_num!]=%%g"
+    REM )
+    REM SET "PaketInstall[!pkgs_num!].Items.Length=!items_num!"
+
+
+    SET PaketInstall[!PaketInstall.Length!]=!tmp_pkgs_desc!
+    SET PaketInstall['!tmp_pkgs_desc!'].File=%%~fG
+    SET "items_num=0"
+    FOR /F "delims=" %%g in ('type "%%~fG"') DO (
+        SET /A "items_num+=1"
+        SET "PaketInstall['!tmp_pkgs_desc!'].Items[!items_num!]=%%g"
+    )
+    SET "PaketInstall['!tmp_pkgs_desc!'].Items.Length=!items_num!"
+    SET "PaketInstall['!tmp_pkgs_desc!'].MenuEntry=Paket !tmp_pkgs_desc! [!items_num! Apps]"
+    REM )
 )
 %LOG% Found %pkgs_num% paket
+REM set PaketInstall
+REM pause
 
+:menu_pilih_paket
 CLS
 echo.========================================================
 echo.= MENU =================================================
 echo.
 echo     Paket Instalasi:
-FOR /L %%A IN (1,1,%pkgs_num%) DO (
-    
+FOR /L %%A IN (1,1,%PaketInstall.Length%) DO (
     IF %%A LSS 10 SET "prefix=%menu_item_prefix% "
-    echo !prefix!%%A. !pkgs_%%A_desc!
+    REM echo !prefix!%%A. !pkgs_%%A_desc!
+    SET "index=%%A"
+    SET "menu_entry=!prefix!%%A. !pkgs_%%A_desc!"
+    SET "nama_paket=!PaketInstall[%%A]!"
+    REM echo !prefix!%%A. !nama_paket!
+    call echo !prefix!%%A. %%PaketInstall['!nama_paket!'].MenuEntry%%
 )
 echo.
 echo     Opsi Lainnya:
@@ -258,7 +280,6 @@ echo.
 SET "menu_pilih_paket_choice="
 SET /P menu_pilih_paket_choice="Pilih Paket Instalasi: "
 IF NOT DEFINED menu_pilih_paket_choice goto menu_pilih_paket
-
 
 
 REM Paket Semua folder
@@ -284,16 +305,33 @@ IF /I "%menu_pilih_paket_choice%"=="B" (
     CALL:buat_paket pkg_desc pkg_file
     IF EXIST "!pkg_file!" (
         %LOG% paket file created: !pkg_file!
+        SET /A "PaketInstall.Length+=1"
+        SET PaketInstall[!PaketInstall.Length!]=!pkg_desc!
+        SET PaketInstall['!pkg_desc!'].File=!pkg_file!
+        SET "items_num=0"
+        FOR /F "delims=" %%g in ('type "!pkg_file!"') DO (
+            SET /A "items_num+=1"
+            SET "PaketInstall['!pkg_desc!'].Items[!items_num!]=%%g"
+        )
+        SET "PaketInstall['!pkg_desc!'].Items.Length=!items_num!"
+        SET "PaketInstall['!pkg_desc!'].MenuEntry=Paket !pkg_desc! [!items_num! Apps]"
+        SET "ptr_SelectedPaketInstall=PaketInstall['!pkg_desc!']"
     ) ELSE (
         >&2 echo Can't create paket file !pkg_file!
     )
-    SET "pkg_desc=Paket !pkg_desc!"
+    REM SET "pkg_desc=Paket !pkg_desc!"
+
     goto menu_isi_paket
 )
-IF DEFINED pkgs_%menu_pilih_paket_choice%_file (
+
+IF "!PaketInstall[%menu_pilih_paket_choice%]!" NEQ "" (
+REM IF DEFINED pkgs_%menu_pilih_paket_choice%_file (
     REM Load paket pilihan
     SET "pkg_file=!pkgs_%menu_pilih_paket_choice%_file!"
     SET "pkg_desc=!pkgs_%menu_pilih_paket_choice%_desc!"
+    
+    SET "key=!PaketInstall[%menu_pilih_paket_choice%]!"
+    SET "ptr_SelectedPaketInstall=PaketInstall['!key!']"
     %LOG% [USER INPUT] paket file selected: !pkg_file!
 ) ELSE goto menu_pilih_paket
 
@@ -302,12 +340,26 @@ IF DEFINED pkgs_%menu_pilih_paket_choice%_file (
 SET "pkg_length=0"
 CALL:echo_verbose 1 "Loading INI file . . ."
 %LOG% Loading paket file: !pkg_file!
-FOR /F "delims=" %%A in ('type "!pkg_file!"') DO (
+FOR /F "delims=" %%G in ('type "!%ptr_SelectedPaketInstall%.File!"') DO (
+REM FOR /F "delims=" %%A in ('type "!pkg_file!"') DO (
     SET /A pkg_length+=1
-    SET pkg_item_!pkg_length!=%%A
-    SET pkg_item_!pkg_length!_in_menu_text=%%A
+    SET pkg_item_!pkg_length!=%%G
+    SET pkg_item_!pkg_length!_in_menu_text=%%G
+
+    REM SET "%ptr_SelectedPaketInstall%.Items[%%G].MenuEntry=%%G"
+    REM SET "%ptr_SelectedPaketInstall%.Items.Length=!pkg_length!"
+    REM SET "%ptr_SelectedPaketInstall%.Items[!pkg_length!]=%%A"
+    REM IF "!AppCfg[%%A].is_loaded!" NEQ "1" (
+    REM     CALL:get_appcfg IniContent "%%A" AppCfg
+    
+    REM )
+    REM SET "%SelectedPaketInstall%[!pkg_length!]=%%A"
 )
 %LOG% Found %pkg_length% items
+
+
+
+REM CALL:check_app_cfg
 
 REM SET /A "show_param=0"
 REM SET /A "show_file=0"
@@ -316,20 +368,28 @@ SET /A "show_detail=0"
 CLS
 echo Found %pkg_length% apps in %pkg_desc%:
 echo.
-FOR /L %%A IN (1,1,%pkg_length%) DO (
-    IF %%A LSS 10 (
+FOR /L %%G IN (1,1,!%ptr_SelectedPaketInstall%.Items.Length!) DO (
+    IF %%G LSS 10 (
         SET "prefix= "
         SET "prefix_ex="
     ) ELSE (
         SET "prefix="
         SET "prefix_ex= "
     )
-    echo.  !prefix!%%A. !pkg_item_%%A_in_menu_text!
-    REM IF "%show_file%" EQU "1" echo.  !prefix!!prefix_ex!   file  : !pkg_item_%%A.installer_file!
-    REM IF "%show_param%" EQU "1" echo.  !prefix!!prefix_ex!   param : !pkg_item_%%A.param!
+    REM echo.  !prefix!%%A. !pkg_item_%%A_in_menu_text!
+    SET "menu_entry=!%ptr_SelectedPaketInstall%.Items[%%G].MenuEntry!"
+    IF "!menu_entry!" EQU "" (
+        SET "app_name=!%ptr_SelectedPaketInstall%.Items[%%G]!"
+        SET "menu_entry=!app_name!"
+    )
+    echo.  !prefix!%%G. !menu_entry!
+    REM IF "%show_file%" EQU "1" echo.  !prefix!!prefix_ex!   file  : !pkg_item_%%G.installer_file!
+    REM IF "%show_param%" EQU "1" echo.  !prefix!!prefix_ex!   param : !pkg_item_%%G.param!
     IF %show_detail% EQU 1 (
-        echo.  !prefix!!prefix_ex!   file  : !pkg_item_%%A.installer_file!
-        echo.  !prefix!!prefix_ex!   param : !pkg_item_%%A.param!
+        REM echo.  !prefix!!prefix_ex!   file  : !pkg_item_%%G.installer_file!
+        REM echo.  !prefix!!prefix_ex!   param : !pkg_item_%%G.param!
+        call echo.  !prefix!!prefix_ex!   file  : %%AppCfg[!app_name!].installer_file%%
+        call echo.  !prefix!!prefix_ex!   param : %%AppCfg[!app_name!].param%%
         
     )
     
@@ -346,55 +406,60 @@ echo.= MENU =================================================
 echo.
 echo     Action:
 echo     1. Install
-echo     2. Test Command
-echo     0. Menu Sebelumnya
+echo     2. Check Status
+echo     0. Kembali ke Menu Sebelumnya
 echo.
 echo     Option:
-echo     3. Load Config
 IF %show_detail% EQU 1 (
-    echo     4. Hide Details
-) ELSE echo     4. Show Details
+    echo     3. Hide Details
+) ELSE echo     3. Show Details
+echo     4. Test Command
 echo.
-SET /P install_mode="Pilih Menu: "
-IF %install_mode%==0 goto menu_pilih_paket
-IF %install_mode%==3 (
-    %LOG% Menu item selected: 3. Check
+SET /P input_menu_install="Pilih Menu: "
+IF %input_menu_install%==0 goto menu_pilih_paket
+IF %input_menu_install%==2 (
+    %LOG% Menu item selected: 2. Check Status
     CALL:check_app_cfg
     goto:menu_display_isi_paket
 )
-IF %install_mode%==4 (
+IF %input_menu_install%==3 (
     REM SET "show_param=1"
     REM SET "show_file=1"
     IF %show_detail% EQU 0 (
         SET /A "show_detail=1"
-        %LOG% Menu item selected: 4. Show Details
+        %LOG% Menu item selected: 3. Show Details
     ) ELSE (
         SET /A "show_detail=0"
-        %LOG% Menu item selected: 4. Hide Details
+        %LOG% Menu item selected: 3. Hide Details
     )
     goto:menu_display_isi_paket
 )
-IF NOT %install_mode%==%_MODE_INSTALL% (
-    IF NOT %install_mode%==%_MODE_TEST% goto:menu_display_isi_paket
+IF NOT "%input_menu_install%"=="1" (
+    IF NOT "%input_menu_install%"=="4" goto:menu_display_isi_paket
 )
-%LOG% Menu item selected: %install_mode%. 
+IF "%input_menu_install%"=="1" SET "install_mode=%_MODE_INSTALL%"
+IF "%input_menu_install%"=="4" SET "install_mode=%_MODE_TEST%"
+
+%LOG% Menu item selected: %input_menu_install%. 
 
 REM ====================================================================
 REM START INSTALLING
-REM CALL:initProgress %pkg_length% "[[PPPP]] %~n0"
-CALL:initProgress %pkg_length% "[[PPPP]] %title% - [[C] of %pkg_length%] Installing"
+SET "apps_count=!%ptr_SelectedPaketInstall%.Items.Length!"
+CALL:initProgress %pkg_length% "[[PPPP]] %title% - [[C] of %apps_count%] Installing"
 CLS
+
 SET fail_count=0
-FOR /L %%A IN (1,1,%pkg_length%) DO (
-    REM CALL:install "!pkg_item_%%A!"
-    REM CALL:install_2 "!pkg_item_%%A!" pkg_item_%%A
-    echo [%%A/%pkg_length%]
-    REM CALL:install_2 "!pkg_item_%%A!" pkg_item_%%A.
-    CALL:install_2 "!pkg_item_%%A!" "AppCfg[!pkg_item_%%A!]"
+FOR /L %%G IN (1,1,%apps_count%) DO (
+    SET "app_name=!%ptr_SelectedPaketInstall%.Items[%%G]!"
+    echo [%%G/%apps_count%]
+    REM CALL:install_2 "!pkg_item_%%G!" pkg_item_%%A.
+    CALL:install_2 "!app_name!" "AppCfg[!app_name!]"
+    SET /A "app_exit_code=!ERRORLEVEL!"
     echo.
-    SET /A "pkg_item_%%A_exit_code=!errorlevel!"
-    IF !pkg_item_%%A_exit_code! NEQ 0 (SET /A fail_count+=1)
-    CALL:doProgress "!pkg_item_%%A!"
+    SET /A "pkg_item_%%G_exit_code=!app_exit_code!"
+    SET "%ptr_SelectedPaketInstall%.Items[%%G].ExitCode=!app_exit_code!"
+    IF !app_exit_code! NEQ 0 (SET /A fail_count+=1)
+    CALL:doProgress "!app_name!"
     
 )
 echo.
@@ -412,27 +477,28 @@ echo =====================================
 REM echo [31mWARNING[0m
 CALL:echo_err "WARNING !"
 echo %fail_count% apps failed to install
-FOR /L %%A IN (1,1,%pkg_length%) DO (
-    SET /A code=!pkg_item_%%A_exit_code!
+FOR /L %%G IN (1,1,%apps_count%) DO (
+    
+    SET /A code=!pkg_item_%%G_exit_code!
+    SET "code=!%ptr_SelectedPaketInstall%.Items[%%G].ExitCode!"
     CALL:get_error_description !code! desc
     IF !code! NEQ 0 (
-        echo    %%A. !pkg_item_%%A! ===^> Code: !code!. !desc!
+        echo    %%G. !pkg_item_%%G! ===^> Code: !code!. !desc!
     )
 )
-FOR /L %%A IN (1,1,%bg_proc_num%) DO (
+FOR /L %%G IN (1,1,%bg_proc_num%) DO (
     REM echo    !bg_proc_%%A!. Exit Code: !bg_proc_%%A_exit_code!
-    SET /A code=!bg_proc_%%A_exit_code!
+    SET /A code=!bg_proc_%%G_exit_code!
     CALL:get_error_description !code! desc
     IF !code! NEQ 0 (
-        echo    %%A. !pkg_item_%%A! ===^> !desc!
+        REM echo    %%G. !pkg_item_%%G! ===^> !desc!
+        echo    %%G. !bg_proc_%%G! ===^> !desc!
     )
 )
 
 :main_end
-EndLocal
 echo.
 echo 
-pause
 EXIT /B
 
 :check_app_cfg
@@ -442,50 +508,82 @@ for /F "tokens=1-4 delims=:.," %%a in ("%time%") do (
 )
 echo.
 CALL:echo_verbose 1 "Loading INI file . . ."
-FOR /L %%A IN (1,1,%pkg_length%) DO (
-    CALL:echo_verbose 2 "Getting configuration for !pkg_item_%%A!"
-    CALL:get_app_inst_cfg "%params_ini_file%" "!pkg_item_%%A!" pkg_item_%%A
+FOR /L %%G IN (1,1,!%ptr_SelectedPaketInstall%.Items.Length!) DO (
+    SET "app_name=!%ptr_SelectedPaketInstall%.Items[%%G]!"
+    call SET "is_loaded=%%AppCfg[!app_name!].is_loaded%%"
+    REM IF "%AppCfg[!app_name!].is_loaded%" NEQ "1" echo Getting configuration for !app_name!
+    IF "!is_loaded!" NEQ "1" (
+        %ECHO_VERBOSE% Getting configuration for !app_name!
+        CALL:get_appcfg IniContent "!app_name!" AppCfg
+
+    )
+    CALL SET "desc=%%AppCfg[!app_name!].desc%%"
+    SET "%ptr_SelectedPaketInstall%.Items[%%G].desc=!desc!"
+
+    REM CALL:echo_verbose 2 "Getting configuration for !app_name!"
+    REM CALL:get_app_inst_cfg "%params_ini_file%" "!pkg_item_%%G!" pkg_item_%%G
+    
     REM IF "!AppCfg[%%A]!" EQU "" (
     REM     CALL:get_app_inst_cfg "%params_ini_file%" "!pkg_item_%%A!" pkg_item_%%A AppCfg[%%A]
     REM )
 )
 
+
 CALL:echo_verbose 1 "Preparing menu display . . ."
-REM set AppName[
 REM Get longest string
 SET /A longest_str_len=0
-FOR /L %%G IN (1,1,%pkg_length%) DO (
-    CALL:strLen "!pkg_item_%%G.desc!" str_len
-    REM set app_name=!pkg_item_%%G.desc!
-    REM CALL SET "str_len=%%AppName[%%app_name%%].StringLength%%"
+FOR /L %%G IN (1,1,!%ptr_SelectedPaketInstall%.Items.Length!) DO (
+    SET "app_desc=!%ptr_SelectedPaketInstall%.Items[%%G].desc!"
+    CALL:strLen "!app_desc!" str_len
+    SET "%ptr_SelectedPaketInstall%.Items[%%G].desc.StringLength=!str_len!"
+ 
     SET /a "pkg_item_%%G_str_len=!str_len!"
     IF !str_len! GTR !longest_str_len! SET /a "longest_str_len=!str_len!"
-    REM ECHO app_name !app_name!
-    REM echo str_len !str_len!
-    REM @echo on
-    REM call echo %AppName[%%app_name%%].StringLength%
-    REM call echo %%AppName[%%app_name%%].StringLength%%
-    REM call echo !AppName[%%app_name%%].StringLength!
-    REM @echo off
+    
 )
 SET /A "max_char=longest_str_len+3"
+SET "%ptr_SelectedPaketInstall%.Items.MaxStringLength=%max_char%"
+
+
 REM echo longest_str_len %longest_str_len%
 REM Fill char
 SET "tmp_str="
-FOR /L %%A IN (1,1,%pkg_length%) DO (
-    SET "str_len=!pkg_item_%%A_str_len!""
+FOR /L %%G IN (1,1,!%ptr_SelectedPaketInstall%.Items.Length!) DO (
+    SET "app_name=!%ptr_SelectedPaketInstall%.Items[%%G]!"
+    SET "app_desc=!%ptr_SelectedPaketInstall%.Items[%%G].desc!"
+
+    REM SET "str_len=!pkg_item_%%G_str_len!""
+    SET "str_len=!%ptr_SelectedPaketInstall%.Items[%%G].desc.StringLength!"
     SET /A "fill_char_count=max_char-str_len"
     CALL:repeat_char - !fill_char_count! fill_char
     REM IF !pkg_item_%%A.status_code! NEQ 0 (
         REM CALL:str_color "!pkg_item_%%A.desc! !fill_char!" tmp_str
     REM ) ELSE SET "tmp_str=!pkg_item_%%A.desc! !fill_char!"
-    SET "tmp_str=!pkg_item_%%A.desc! !fill_char!"
-    IF !pkg_item_%%A.status_code! NEQ 0 (
+    REM SET "tmp_str=!pkg_item_%%G.desc! !fill_char!"
+    
+    CALL SET "status=%%AppCfg[!app_name!].status%%"
+    CALL SET "status_code=%%AppCfg[!app_name!].status_code%%"
+    SET "tmp_str=!app_desc! !fill_char!"
+    IF !status_code! NEQ 0 (
+        call:str_color "!tmp_str!" %COLOR_RED% tmp_str
+        call:str_color "!status!" %COLOR_RED% status
+    ) ELSE (
+        call:str_color "!status!" %COLOR_GREEN% status
+    )
+    SET "tmp_str=!tmp_str! !status!"
+    SET "%ptr_SelectedPaketInstall%.Items[%%G].MenuEntry=!tmp_str!"
+    REM echo tmp_str !tmp_str!
+
+    IF !pkg_item_%%G.status_code! NEQ 0 (
         call:str_color "!tmp_str!" %COLOR_RED% tmp_str
     )
-    SET "pkg_item_%%A_in_menu_text=!tmp_str! !pkg_item_%%A.status!"
+    REM IF !AppCfg[].status_code! NEQ 0 (
+    REM     call:str_color "!tmp_str!" %COLOR_RED% tmp_str
+    REM )
+    SET "pkg_item_%%G_in_menu_text=!tmp_str! !pkg_item_%%G.status!"
     
 )
+REM pausepause
 
 rem Get end time:
 for /F "tokens=1-4 delims=:.," %%a in ("%time%") do (
@@ -500,8 +598,17 @@ if %mm% lss 10 set mm=0%mm%
 if %ss% lss 10 set ss=0%ss%
 if %cc% lss 10 set cc=0%cc%
 echo %hh%:%mm%:%ss%,%cc%
-pause
+REM pause
 EXIT /B
+
+:prepare_PaketInstall_menu_entry PaketInstall['name']
+SetLocal EnableExtensions EnableDelayedExpansion
+SET "paket=%~1"
+
+(ENDLOCAL & REM -- RETURN VALUES
+    IF "%out_result%" NEQ "" (set "%out_result%=%desc%") ELSE ECHO %out_result%
+    EXIT /B %exit_code%
+)
 
 REM ----------------------------------------------------------------------
 REM WAIT FOR BACKGROUND INSTALLATION
@@ -698,6 +805,7 @@ IF %prepared% NEQ 1 (
         CALL:echo_err "UNKNOWN ERROR"
     )
 )
+
 SET "exit_code=%app_cfg.status_code%"
 echo Installing %app_cfg.desc% . . . . .
 IF %exit_code% NEQ 0 (
@@ -715,7 +823,8 @@ SET "start_command=START "%~n0 - Installing %app_cfg.desc%" /D "%app_cfg.install
 IF "%install_mode%"=="%_MODE_TEST%" (
     REM %LOG% Test echoing command START "Installing %app_cfg.desc%" /D "%app_cfg.installer_dir%" %app_cfg.wait% "%app_cfg.installer_dir%\%app_cfg.installer_file%" %app_cfg.param%
     REM echo START "Installing %app_cfg.desc%" /D "%app_cfg.installer_dir%" %app_cfg.wait% "%app_cfg.installer_dir%\%app_cfg.installer_file%" %app_cfg.param%
-    IF DEFINED app_cfg.wait (
+    REM IF DEFINED app_cfg.wait (
+    IF /I "%app_cfg.wait%" EQU "false" (
         %LOG% Test echoing command %start_command%
         echo %start_command%
     ) ELSE (
@@ -732,7 +841,8 @@ IF "%install_mode%"=="%_MODE_TEST%" (
     REM %LOG% Executing command START "Installing %app_cfg.desc%" /D "%app_cfg.installer_dir%" %app_cfg.wait% "%app_cfg.installer_dir%\%app_cfg.installer_file%" %app_cfg.param%
     REM START "Installing %app_cfg.desc%" /D "%app_cfg.installer_dir%" %app_cfg.wait% "%app_cfg.installer_dir%\%app_cfg.installer_file%" %app_cfg.param%
     
-    IF DEFINED app_cfg.wait (
+    REM IF DEFINED app_cfg.wait (
+    IF /I "%app_cfg.wait%" EQU "true" (
         %LOG% Executing command %start_command%
         %start_command%
     ) ELSE (
@@ -844,7 +954,7 @@ SET "cfg_crack_file=!%SectionVar%[crack_file]!"
 SET "cfg_crack_dst=!%SectionVar%[crack_dst]!"
 SET "cfg_extra_script=!%SectionVar%[extra_script]!"
 SET /A "cfg_status_code=0"
-SET "cfg_status="
+SET "cfg_status=Ready"
 SET "cfg_desc=%SectionName%"
 
 :get_appcfg__installer_dir
@@ -1333,8 +1443,6 @@ IF DEFINED out_num_imported (
 EXIT /B
 
 
-
-
 REM ==================================================================================
 REM FUNCTION NAME
 :get_version retvar
@@ -1489,6 +1597,7 @@ REM CONTENT
     echo param=/S /IT /TM
     echo [DirectX]
     echo param=/silent
+    echo direct_download_url=https://download.microsoft.com/download/8/4/A/84A35BF1-DAFE-4AE8-82AF-AD2AE20B6B14/directx_Jun2010_redist.exe
     echo [Format Factory]
     echo param=/VERYSILENT /I /EN
     echo [FurMark]
@@ -1508,9 +1617,12 @@ REM CONTENT
     echo ; https://www.oracle.com/technetwork/java/javase/silent-136552.html
     echo ; https://docs.oracle.com/javase/8/docs/technotes/guides/install/config.html#installing_with_config_file
     echo param=/s REBOOT=0 AUTO_UPDATE=0
+    echo direct_download_url_32=https://javadl.oracle.com/webapps/download/AutoDL?BundleId=239856_230deb18db3e4014bb8e3e8324f81b43
+    echo direct_download_url_64=https://javadl.oracle.com/webapps/download/AutoDL?BundleId=239858_230deb18db3e4014bb8e3e8324f81b43
     echo [K-Lite Codec Pack]
     echo param=/SILENT /SUPPRESSMSGBOXES /NORESTART /SP-
     echo param_quiet=/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-
+    echo direct_download_url=https://files3.codecguide.com/K-Lite_Codec_Pack_1520_Mega.exe
     echo [Kodi]
     echo param=/S
     echo [Microsoft .NET Framework]
@@ -1523,6 +1635,8 @@ REM CONTENT
     echo param=/adminfile basic.MSP
     echo wait=false
     echo [Microsoft Office 2016]
+    echo ; .MSP files must be created first
+    echo ; SEE https://www.google.com/search?q=microsoft%20office%202016%20silent%20install
     echo param=/adminfile basic_all.MSP
     echo wait=false
     echo [Microsoft Office Proofing Tools 2013]
@@ -1557,6 +1671,10 @@ REM CONTENT
     echo param=-autoinstall
     echo wait=false
     echo [VLC Media Player]
+    echo direct_download_url_32=http://download.videolan.org/pub/videolan/vlc/3.0.8/win32/vlc-3.0.8-win32.exe
+    echo direct_download_url_32_msi=http://download.videolan.org/pub/videolan/vlc/3.0.8/win32/vlc-3.0.8-win32.msi
+    echo direct_download_url_64=http://download.videolan.org/pub/videolan/vlc/3.0.8/win64/vlc-3.0.8-win64.exe
+    echo direct_download_url_64_msi=http://download.videolan.org/pub/videolan/vlc/3.0.8/win64/vlc-3.0.8-win64.msi
     echo param=/S
     echo [WinRAR]
     echo param=/S /IEN
@@ -2165,7 +2283,14 @@ REM ============================================================================
 REM                                        EXTERNAL SUBROUTINE
 :EXTERNAL_SUBROUTINE
 
+:init_batch_framework
 
+SET "ECHO_VERBOSE=1>CON echo [VERBOSE]"
+
+SET "LOG=1>> %log_file% echo"
+SET "LOG_ERR=2>> %log_file% echo"
+
+Exit /b
 
 REM ==================================================================================
 REM INIT PROGRESS
@@ -2574,6 +2699,32 @@ REM Function body
 for /f "tokens=*" %%A in ('findstr "adalah"') do (
     echo %%A
 )
+
+:extract_batch_script label OutFile
+SetLocal EnableExtensions EnableDelayedExpansion
+SET "label=%~1"
+SET "OutFile=%~2"
+
+set "line_start="
+SET "command=type "%f0" ^| findstr /LIBNC:"%label%" "
+FOR /F "delims=:" %%G in ('%command%') DO (
+    SET "line_start=%%G"
+    goto:extract_batch_script__1
+)
+goto:extract_batch_script__end
+
+:extract_batch_script__1
+FOR /F "skip=%line_start% tokens=1*" %%G in ('command') DO (
+    SET "line=%%G"
+    IF /I "!line:~0,4!" EQU "exit" goto:extract_batch_script__end
+    echo.%%G>> "%OutFile%"
+)
+
+:extract_batch_script__end
+(ENDLOCAL & REM -- RETURN VALUES
+    REM IF "%retval%" NEQ "" SET "%retval%=%result%"
+)
+EXIT /B
 
 :create_example_folder_structure
 echo Creating Folder structure example on %search_location%
