@@ -2,9 +2,6 @@
 REM https://github.com/asfahann/InstallBoss/releases/latest
 REM https://github.com/asfahann/InstallBoss/releases/latest/download/InstallBoss.cmd
 
-REM TODO 1: Fix double echo on error
-REM TODO 2: Fix Numbering on Fail Report 
-
 REM.-- Prepare the Command Processor
 SETLOCAL ENABLEEXTENSIONS
 SETLOCAL ENABLEDELAYEDEXPANSION
@@ -13,8 +10,8 @@ CD /D "%~dp0"
 REM.-- Version History --
 REM         0.1           20191003 Author Asfahann
 REM         0.2           20191006 Author Asfahann
-SET version=0.1-beta & rem 20191003 p.h.  initial version, providing the framework
-SET version=0.2 & rem 20191006 p.h.  Added feature to create folder structure example
+SET version=0.1-beta    & rem 20191003 p.h.  initial version, providing the framework
+SET version=0.2         & rem 20191006 p.h.  Added feature to create folder structure example
 REM !! For a new version entry, copy the last entry down and modify Date, Author and Description
 SET version=%version: =%
 
@@ -148,8 +145,9 @@ call:get_ini_content "%params_ini_file%" IniContent
 echo.
 
 REM set "IniContent[Winrar kosong]"
-REM call:copy_var "InniContent[Winrar kosong]" new_var
+REM call:copy_var "IniContent[Winrar kosongg]" new_var
 REM echo with copy_var:
+REM echo exit code: %errorlevel%
 REM set new_var
 REM pause
 REM exit /b
@@ -238,18 +236,7 @@ FOR /F "tokens=*" %%G in ('dir "%script_path%" /b /a-d /od ^| findstr /i /r /c:"
     SET "tmp_nama_paket="
     SET "pkgs_!pkgs_num!_file=%%~G"
     SET "pkgs_!pkgs_num!_desc=Paket !tmp_pkgs_desc!"
-    
-    
-    REM SET "PaketInstall['%%G']=!pkgs_num!"
-    REM SET "PaketInstall[!pkgs_num!]=%%G"
-    REM SET "items_num=0"
-    REM FOR /F "delims=" %%g in ('type "%%~fG"') DO (
-    REM     SET /A "items_num+=1"
-    REM     SET "PaketInstall[!pkgs_num!].Items[!items_num!]=%%g"
-    REM )
-    REM SET "PaketInstall[!pkgs_num!].Items.Length=!items_num!"
-
-
+   
     SET PaketInstall[!PaketInstall.Length!]=!tmp_pkgs_desc!
     SET PaketInstall['!tmp_pkgs_desc!'].File=%%~fG
     SET "items_num=0"
@@ -283,16 +270,39 @@ FOR /L %%A IN (1,1,%PaketInstall.Length%) DO (
 echo.
 echo     Opsi Lainnya:
 echo     B  Buat Paket Instalasi Baru
+echo     E  Buat Contoh Struktur Folder
 echo     I  Install Semua Folder
 echo.
 SET "menu_pilih_paket_choice="
 SET /P menu_pilih_paket_choice="Pilih Paket Instalasi: "
 IF NOT DEFINED menu_pilih_paket_choice goto menu_pilih_paket
 
+REM SET "var="&for /f "delims=0123456789" %%i in ("%1") do set var=%%i
+REM if defined var (echo %1 NOT numeric) else (echo %1 numeric)
+REM IF /I "%menu_pilih_paket_choice%"=="" goto :menu_pilih_paket
+REM IF /I "%menu_pilih_paket_choice%"=="B" goto :
+REM IF /I "%menu_pilih_paket_choice%"=="E" goto :
+REM IF /I "%menu_pilih_paket_choice%"=="I" goto :
+
+IF /I "%menu_pilih_paket_choice%"=="E" (
+    REM REM Buat Contoh Struktur Folder
+    REM SET /A "folder_found=0"
+    REM FOR /F "delims=" %%G in ('DIR "%search_location%" /ad-h /B ^| findstr /v /r /c:"^[.]"') DO (
+    REM     SET /A "folder_found=1"
+    REM )
+    REM IF %folder_found% EQU 0 (
+    REM     SET "input_yes_no=N"
+    REM     SET /P input_yes_no="Buat Contoh Struktur Folder [y/N] ? "
+    REM     IF /I "!input_yes_no!"=="y" (
+            call:create_example_folder_structure
+        REM )
+    REM )
+
+)
 
 REM Paket Semua folder
-IF "%menu_pilih_paket_choice%"=="i" SET "menu_pilih_paket_choice=I"
-IF "%menu_pilih_paket_choice%"=="I" (
+REM IF "%menu_pilih_paket_choice%"=="i" SET "menu_pilih_paket_choice=I"
+IF /I "%menu_pilih_paket_choice%"=="I" (
     %LOG% [USER INPUT] Menu Install Semua Folder is selected
     SET "pkg_desc=Paket Semua Folder"
     SET "pkg_file=%paket_semua_folder_file%"
@@ -301,8 +311,21 @@ IF "%menu_pilih_paket_choice%"=="I" (
         %LOG% paket file created: !pkg_file!
     ) ELSE (
         >&2 echo Can't create paket file !pkg_file!
+        pause
+        goto :menu_pilih_paket
     )
     REM attrib +H "%tmp_file%"
+
+    SET PaketInstallAllFolder=Semua Folder
+    SET PaketInstallAllFolder.File=!pkg_file!
+    SET "items_num=0"
+    FOR /F "delims=" %%g in ('type "!pkg_file!"') DO (
+        SET /A "items_num+=1"
+        SET "PaketInstallAllFolder.Items[!items_num!]=%%g"
+    )
+    SET "PaketInstallAllFolder.Items.Length=!items_num!"
+    SET "PaketInstallAllFolder.MenuEntry=Paket Semua Folder [!items_num! Apps]"
+    SET "ptr_SelectedPaketInstall=PaketInstallAllFolder"
     goto:menu_isi_paket
 )
 
@@ -340,6 +363,7 @@ REM IF DEFINED pkgs_%menu_pilih_paket_choice%_file (
     
     SET "key=!PaketInstall[%menu_pilih_paket_choice%]!"
     SET "ptr_SelectedPaketInstall=PaketInstall['!key!']"
+    
     %LOG% [USER INPUT] paket file selected: !pkg_file!
 ) ELSE goto menu_pilih_paket
 
@@ -485,13 +509,15 @@ echo =====================================
 REM echo [31mWARNING[0m
 CALL:echo_err "WARNING !"
 echo %fail_count% apps failed to install
+SET "ctr=0"
 FOR /L %%G IN (1,1,%apps_count%) DO (
     
     SET /A code=!pkg_item_%%G_exit_code!
     SET "code=!%ptr_SelectedPaketInstall%.Items[%%G].ExitCode!"
     CALL:get_error_description !code! desc
     IF !code! NEQ 0 (
-        echo    %%G. !pkg_item_%%G! ===^> Code: !code!. !desc!
+        SET /A "ctr+=1"
+        echo    !ctr!. !pkg_item_%%G! ===^> Code: !code!. !desc!
     )
 )
 FOR /L %%G IN (1,1,%bg_proc_num%) DO (
@@ -499,8 +525,9 @@ FOR /L %%G IN (1,1,%bg_proc_num%) DO (
     SET /A code=!bg_proc_%%G_exit_code!
     CALL:get_error_description !code! desc
     IF !code! NEQ 0 (
+        SET /A "ctr+=1"
         REM echo    %%G. !pkg_item_%%G! ===^> !desc!
-        echo    %%G. !bg_proc_%%G! ===^> !desc!
+        echo    !ctr!. !bg_proc_%%G! ===^> !desc!
     )
 )
 
@@ -625,7 +652,7 @@ SET /A "delay=1"
 
 SET /A "act_delay=delay+1"
 SET /A "bg_proc_num=0"
-REM IF NOT EXIST "%no_wait_installers_file%" echo can't find no_wait_installers_file
+IF NOT EXIST "%no_wait_installers_file%" goto:wait_bg_install__end
 FOR /F "delims=" %%A in ('type "%no_wait_installers_file%"') do (
     SET /A "bg_proc_num+=1"
     SET "bg_proc_!bg_proc_num!=%%A"
@@ -657,6 +684,7 @@ FOR /L %%A IN (1,1,%bg_proc_num%) DO (
         SET "exit_code_file=%tmp_folder%\!bg_proc_%%A!.exit_code.tmp"
         IF EXIST "!exit_code_file!" (
             FOR /F %%a in ('type "!exit_code_file!"') DO SET /A "exit_code=%%a"
+            REM SET "%ptr_SelectedPaketInstall%="
             SET /A "bg_proc_%%A_exit_code=!exit_code!"
             SET /A "new_num_finished=num_finished+1"
             IF !exit_code! EQU 0 (
@@ -821,12 +849,12 @@ REM )
 
 SET "exit_code=%app_cfg.status_code%"
 echo Installing %app_cfg.desc% . . . . .
-IF %exit_code% NEQ 0 (
-    CALL:echo_err [ERROR]
-    CALL:get_error_description %exit_code% desc
-    CALL:echo_err "!desc!"
-    goto:install_2__end
-)
+REM IF %exit_code% NEQ 0 (
+REM     CALL:echo_err [ERROR]
+REM     CALL:get_error_description %exit_code% desc
+REM     CALL:echo_err "!desc!"
+REM     goto:install_2__end
+REM )
 REM SET "exit_codes_file=%~dpn0.exit_codes.tmp"
 REM type nul > "%exit_code_file%"
 REM IF EXIST "%exit_code_file%" (
@@ -1896,7 +1924,7 @@ IF "%windows_number%"=="10" (
 ) ELSE (
     echo.[%~1]
 )
-echo.%~1 >&2
+REM echo.%~1 >&2
 Exit /b
 
 REM ==================================================================================
@@ -2443,7 +2471,7 @@ SET "command=SET %src_var%^| findstr /LIBC:"%src_var%""
         SET "attr_name=!var_name:%src_var%=!"
         SET "%dst_var%!attr_name!=%%H"
     )
-) && (exit /b !ERRORLEVEL!) || (exit /b !ERRORLEVEL!)
+) > nul 2>&1 && (exit /b !ERRORLEVEL!) || (exit /b !ERRORLEVEL!)
 REM echo ERRORLEVEL !ERRORLEVEL!
 
 
@@ -2794,6 +2822,7 @@ FOR /F "tokens=1* delims==" %%G in ('%command%') DO (
 
 REM md "%search_location%\VLC Media Player"
 REM call:create_shortcut "%search_location%\VLC Media Player\test.url" "http://www.google.com"
+pause
 exit /b
 
 
