@@ -8,10 +8,12 @@ SETLOCAL ENABLEDELAYEDEXPANSION
 CD /D "%~dp0"
 
 REM.-- Version History --
-REM         0.1           20191003 Author Asfahann
-REM         0.2           20191006 Author Asfahann
-SET version=0.1-beta    & rem 20191003 p.h.  initial version, providing the framework
-SET version=0.2         & rem 20191006 p.h.  Added feature to create folder structure example
+REM         0.1           2019-10-03 Author Asfahann
+REM         0.2           2019-10-06 Author Asfahann
+REM         0.3           2019-10-14 Author Asfahann
+SET version=0.1-beta    & rem 2019-10-03 p.h.  initial version, providing the framework
+SET version=0.2         & rem 2019-10-06 p.h.  Added feature to create folder structure example
+SET version=0.3         & rem 2019-10-14 p.h.  Added improved UI on Installation progress
 REM !! For a new version entry, copy the last entry down and modify Date, Author and Description
 SET version=%version: =%
 
@@ -84,7 +86,9 @@ SET /A "preload_app_cfg=0"
 SET "SETTINGS_VERBOSE_LEVEL=5"
 SET "default_msi_param=/passive /norestart"
 
-SET "verbose=0"
+SET "verbose=1"
+SET "debug=1"
+
 SET /A "suppress_error=0"
 
 SET "param_tipe_1=/S"
@@ -107,6 +111,9 @@ REM INIT
 
 SET "ECHO_VERBOSE=REM ."
 IF "%verbose%" EQU "1" SET "ECHO_VERBOSE=echo [VERBOSE]"
+
+SET "ECHO_DEBUG=REM ."
+IF "%debug%" EQU "1" SET "ECHO_DEBUG=echo [DEBUG]"
 
 %LOG%.
 %LOG% --------------------------------
@@ -224,32 +231,32 @@ SET "menu_item_prefix=   "
 REM :menu_pilih_paket
 :scan_paket
 SET "pkgs_num=0"
-SET /A "PaketInstall.Length=0"
+SET /A "AppPackages.Length=0"
 SET "tmp_nama_paket="
 SET "tmp_file_name="
 %LOG% Searching paket files
 FOR /F "tokens=*" %%G in ('dir "%script_path%" /b /a-d /od ^| findstr /i /r /c:"^%script_base_name%\.paket\..*\.txt$"') do (
     SET /A pkgs_num+=1
-    SET /A "PaketInstall.Length+=1"
+    SET /A "AppPackages.Length+=1"
     SET "tmp_pkgs_filename=%%~nG"
     SET "tmp_pkgs_desc=!tmp_pkgs_filename:%script_base_name%.paket.=!"
     SET "tmp_nama_paket="
     SET "pkgs_!pkgs_num!_file=%%~G"
     SET "pkgs_!pkgs_num!_desc=Paket !tmp_pkgs_desc!"
    
-    SET PaketInstall[!PaketInstall.Length!]=!tmp_pkgs_desc!
-    SET PaketInstall['!tmp_pkgs_desc!'].File=%%~fG
+    SET AppPackages[!AppPackages.Length!]=!tmp_pkgs_desc!
+    SET AppPackages['!tmp_pkgs_desc!'].File=%%~fG
     SET "items_num=0"
     FOR /F "delims=" %%g in ('type "%%~fG"') DO (
         SET /A "items_num+=1"
-        SET "PaketInstall['!tmp_pkgs_desc!'].Items[!items_num!]=%%g"
+        SET "AppPackages['!tmp_pkgs_desc!'].Items[!items_num!]=%%g"
     )
-    SET "PaketInstall['!tmp_pkgs_desc!'].Items.Length=!items_num!"
-    SET "PaketInstall['!tmp_pkgs_desc!'].MenuEntry=Paket !tmp_pkgs_desc! [!items_num! Apps]"
+    SET "AppPackages['!tmp_pkgs_desc!'].Items.Length=!items_num!"
+    SET "AppPackages['!tmp_pkgs_desc!'].MenuEntry=Paket !tmp_pkgs_desc! [!items_num! Apps]"
     REM )
 )
 %LOG% Found %pkgs_num% paket
-REM set PaketInstall
+REM set AppPackages
 REM pause
 
 :menu_pilih_paket
@@ -258,14 +265,14 @@ echo.========================================================
 echo.= MENU =================================================
 echo.
 echo     Paket Instalasi:
-FOR /L %%A IN (1,1,%PaketInstall.Length%) DO (
-    IF %%A LSS 10 SET "prefix=%menu_item_prefix% "
+FOR /L %%G IN (1,1,%AppPackages.Length%) DO (
+    IF %%G LSS 10 SET "prefix=%menu_item_prefix% "
     REM echo !prefix!%%A. !pkgs_%%A_desc!
     SET "index=%%A"
-    SET "menu_entry=!prefix!%%A. !pkgs_%%A_desc!"
-    SET "nama_paket=!PaketInstall[%%A]!"
+    SET "menu_entry=!prefix!%%G. !pkgs_%%G_desc!"
+    SET "nama_paket=!AppPackages[%%G]!"
     REM echo !prefix!%%A. !nama_paket!
-    call echo !prefix!%%A. %%PaketInstall['!nama_paket!'].MenuEntry%%
+    call echo !prefix!%%G. %%AppPackages['!nama_paket!'].MenuEntry%%
 )
 echo.
 echo     Opsi Lainnya:
@@ -316,16 +323,16 @@ IF /I "%menu_pilih_paket_choice%"=="I" (
     )
     REM attrib +H "%tmp_file%"
 
-    SET PaketInstallAllFolder=Semua Folder
-    SET PaketInstallAllFolder.File=!pkg_file!
+    SET AllFolderPackage=Semua Folder
+    SET AllFolderPackage.File=!pkg_file!
     SET "items_num=0"
     FOR /F "delims=" %%g in ('type "!pkg_file!"') DO (
         SET /A "items_num+=1"
-        SET "PaketInstallAllFolder.Items[!items_num!]=%%g"
+        SET "AllFolderPackage.Items[!items_num!]=%%g"
     )
-    SET "PaketInstallAllFolder.Items.Length=!items_num!"
-    SET "PaketInstallAllFolder.MenuEntry=Paket Semua Folder [!items_num! Apps]"
-    SET "ptr_SelectedPaketInstall=PaketInstallAllFolder"
+    SET "AllFolderPackage.Items.Length=!items_num!"
+    SET "AllFolderPackage.MenuEntry=Paket Semua Folder [!items_num! Apps]"
+    SET "ptr_SelectedPackage=AllFolderPackage"
     goto:menu_isi_paket
 )
 
@@ -336,17 +343,17 @@ IF /I "%menu_pilih_paket_choice%"=="B" (
     CALL:buat_paket pkg_desc pkg_file
     IF EXIST "!pkg_file!" (
         %LOG% paket file created: !pkg_file!
-        SET /A "PaketInstall.Length+=1"
-        SET PaketInstall[!PaketInstall.Length!]=!pkg_desc!
-        SET PaketInstall['!pkg_desc!'].File=!pkg_file!
+        SET /A "AppPackages.Length+=1"
+        SET AppPackages[!AppPackages.Length!]=!pkg_desc!
+        SET AppPackages['!pkg_desc!'].File=!pkg_file!
         SET "items_num=0"
         FOR /F "delims=" %%g in ('type "!pkg_file!"') DO (
             SET /A "items_num+=1"
-            SET "PaketInstall['!pkg_desc!'].Items[!items_num!]=%%g"
+            SET "AppPackages['!pkg_desc!'].Items[!items_num!]=%%g"
         )
-        SET "PaketInstall['!pkg_desc!'].Items.Length=!items_num!"
-        SET "PaketInstall['!pkg_desc!'].MenuEntry=Paket !pkg_desc! [!items_num! Apps]"
-        SET "ptr_SelectedPaketInstall=PaketInstall['!pkg_desc!']"
+        SET "AppPackages['!pkg_desc!'].Items.Length=!items_num!"
+        SET "AppPackages['!pkg_desc!'].MenuEntry=Paket !pkg_desc! [!items_num! Apps]"
+        SET "ptr_SelectedPackage=AppPackages['!pkg_desc!']"
     ) ELSE (
         >&2 echo Can't create paket file !pkg_file!
     )
@@ -355,14 +362,14 @@ IF /I "%menu_pilih_paket_choice%"=="B" (
     goto menu_isi_paket
 )
 
-IF "!PaketInstall[%menu_pilih_paket_choice%]!" NEQ "" (
+IF "!AppPackages[%menu_pilih_paket_choice%]!" NEQ "" (
 REM IF DEFINED pkgs_%menu_pilih_paket_choice%_file (
     REM Load paket pilihan
     SET "pkg_file=!pkgs_%menu_pilih_paket_choice%_file!"
     SET "pkg_desc=!pkgs_%menu_pilih_paket_choice%_desc!"
     
-    SET "key=!PaketInstall[%menu_pilih_paket_choice%]!"
-    SET "ptr_SelectedPaketInstall=PaketInstall['!key!']"
+    SET "key=!AppPackages[%menu_pilih_paket_choice%]!"
+    SET "ptr_SelectedPackage=AppPackages['!key!']"
     
     %LOG% [USER INPUT] paket file selected: !pkg_file!
 ) ELSE goto menu_pilih_paket
@@ -372,20 +379,20 @@ REM IF DEFINED pkgs_%menu_pilih_paket_choice%_file (
 SET "pkg_length=0"
 CALL:echo_verbose 1 "Loading INI file . . ."
 %LOG% Loading paket file: !pkg_file!
-FOR /F "delims=" %%G in ('type "!%ptr_SelectedPaketInstall%.File!"') DO (
+FOR /F "delims=" %%G in ('type "!%ptr_SelectedPackage%.File!"') DO (
 REM FOR /F "delims=" %%A in ('type "!pkg_file!"') DO (
     SET /A pkg_length+=1
     SET pkg_item_!pkg_length!=%%G
     SET pkg_item_!pkg_length!_in_menu_text=%%G
 
-    REM SET "%ptr_SelectedPaketInstall%.Items[%%G].MenuEntry=%%G"
-    REM SET "%ptr_SelectedPaketInstall%.Items.Length=!pkg_length!"
-    REM SET "%ptr_SelectedPaketInstall%.Items[!pkg_length!]=%%A"
+    REM SET "%ptr_SelectedPackage%.Items[%%G].MenuEntry=%%G"
+    REM SET "%ptr_SelectedPackage%.Items.Length=!pkg_length!"
+    REM SET "%ptr_SelectedPackage%.Items[!pkg_length!]=%%A"
     REM IF "!AppCfg[%%A].is_loaded!" NEQ "1" (
     REM     CALL:get_appcfg IniContent "%%A" AppCfg
     
     REM )
-    REM SET "%SelectedPaketInstall%[!pkg_length!]=%%A"
+    REM SET "%SelectedAppPackages%[!pkg_length!]=%%A"
 )
 %LOG% Found %pkg_length% items
 
@@ -400,7 +407,7 @@ SET /A "show_detail=0"
 CLS
 echo Found %pkg_length% apps in %pkg_desc%:
 echo.
-FOR /L %%G IN (1,1,!%ptr_SelectedPaketInstall%.Items.Length!) DO (
+FOR /L %%G IN (1,1,!%ptr_SelectedPackage%.Items.Length!) DO (
     IF %%G LSS 10 (
         SET "prefix= "
         SET "prefix_ex="
@@ -409,12 +416,14 @@ FOR /L %%G IN (1,1,!%ptr_SelectedPaketInstall%.Items.Length!) DO (
         SET "prefix_ex= "
     )
     REM echo.  !prefix!%%A. !pkg_item_%%A_in_menu_text!
-    SET "menu_entry=!%ptr_SelectedPaketInstall%.Items[%%G].MenuEntry!"
+    SET "menu_entry=!%ptr_SelectedPackage%.Items[%%G].MenuEntry!"
     IF "!menu_entry!" EQU "" (
-        SET "app_name=!%ptr_SelectedPaketInstall%.Items[%%G]!"
+        SET "app_name=!%ptr_SelectedPackage%.Items[%%G]!"
         SET "menu_entry=!app_name!"
     )
     echo.  !prefix!%%G. !menu_entry!
+    REM echo.  !prefix!%%G. !%ptr_SelectedPackage%.Items[%%G].Desc.LineFormat! !%ptr_SelectedPackage%.Items[%%G].PreparationStatus!
+    
     REM IF "%show_file%" EQU "1" echo.  !prefix!!prefix_ex!   file  : !pkg_item_%%G.installer_file!
     REM IF "%show_param%" EQU "1" echo.  !prefix!!prefix_ex!   param : !pkg_item_%%G.param!
     IF %show_detail% EQU 1 (
@@ -476,25 +485,49 @@ IF "%input_menu_install%"=="4" SET "install_mode=%_MODE_TEST%"
 
 REM ====================================================================
 REM START INSTALLING
-SET "apps_count=!%ptr_SelectedPaketInstall%.Items.Length!"
+SET "apps_count=!%ptr_SelectedPackage%.Items.Length!"
 CALL:initProgress %pkg_length% "[[PPPP]] %title% - [[C] of %apps_count%] Installing"
 CLS
 
 SET fail_count=0
+SET background_install_running_count=0
+SET background_install_finished_count=0
+CALL:prepare_installation_status
 FOR /L %%G IN (1,1,%apps_count%) DO (
-    SET "app_name=!%ptr_SelectedPaketInstall%.Items[%%G]!"
+    SET "%ptr_SelectedPackage%.Items[%%G].InstallState.ChangeFlag=1"
+    CALL:update_installation_status
+
+    SET "app_name=!%ptr_SelectedPackage%.Items[%%G]!"
+    SET "app_exit_code="
+    CALL SET "wait=%%AppCfg[!app_name!].wait%%"
     echo [%%G/%apps_count%]
-    REM CALL:install_2 "!pkg_item_%%G!" pkg_item_%%A.
-    CALL:install_2 "!app_name!" "AppCfg[!app_name!]"
-    SET /A "app_exit_code=!ERRORLEVEL!"
-    echo.
-    SET /A "pkg_item_%%G_exit_code=!app_exit_code!"
-    SET "%ptr_SelectedPaketInstall%.Items[%%G].ExitCode=!app_exit_code!"
-    IF !app_exit_code! NEQ 0 (SET /A fail_count+=1)
-    CALL:doProgress "!app_name!"
     
+    CALL:install_2 "!app_name!" "AppCfg[!app_name!]"
+    SET "app_exit_code=!ERRORLEVEL!"
+    IF /I "!wait!" EQU "true" (
+        SET "%ptr_SelectedPackage%.Items[%%G].ExitCode=!app_exit_code!"
+        SET "%ptr_SelectedPackage%.Items[%%G].InstallState.ExitCode=!app_exit_code!"
+    ) ELSE (
+        set /A "background_install_running_count+=1"
+        SET "%ptr_SelectedPackage%.Items[%%G].ExitCodeFile=%tmp_folder%\!app_name!.exit_code.tmp"
+        SET "%ptr_SelectedPackage%.Items[%%G].InstallState.ExitCodeFile=%tmp_folder%\!app_name!.exit_code.tmp"
+    )
+    IF !app_exit_code! NEQ 0 (SET "fail_count+=1")
+    echo.
+    CALL:doProgress "!app_name!"
+    SET "%ptr_SelectedPackage%.Items[%%G].InstallState.ChangeFlag=1"
+)
+:wait_background_install
+CALL:update_installation_status
+IF %background_install_finished_count% LSS %background_install_running_count% (
+    %ECHO_DEBUG% %background_install_finished_count% of %background_install_running_count% Background installation finihed
+    ping /n 3 127.0.0.1>nul
+    goto:wait_background_install
 )
 echo.
+echo Done ^^!
+echo 
+exit /b
 
 CALL:wait_bg_install
 
@@ -513,7 +546,7 @@ SET "ctr=0"
 FOR /L %%G IN (1,1,%apps_count%) DO (
     
     SET /A code=!pkg_item_%%G_exit_code!
-    SET "code=!%ptr_SelectedPaketInstall%.Items[%%G].ExitCode!"
+    SET "code=!%ptr_SelectedPackage%.Items[%%G].ExitCode!"
     CALL:get_error_description !code! desc
     IF !code! NEQ 0 (
         SET /A "ctr+=1"
@@ -536,6 +569,96 @@ echo.
 echo 
 EXIT /B
 
+:prepare_installation_status
+
+CALL:check_app_cfg
+
+FOR /L %%G IN (1,1,!%ptr_SelectedPackage%.Items.Length!) DO (
+    IF %%G LSS 10 (
+        SET "prefix= "
+        SET "prefix_ex="
+    ) ELSE (
+        SET "prefix="
+        SET "prefix_ex= "
+    )
+    
+    SET "ptr_item=%ptr_SelectedPackage%.Items[%%G]"
+    SET "!ptr_item!.InstallState.ChangeFlag=0"
+    SET "!ptr_item!.InstallState.Status=Pending"
+    SET "!ptr_item!.InstallState.ExitCode="
+    SET "!ptr_item!.InstallState.ExitCodeFile="
+
+    SET "!ptr_item!.InstallState.Text= !prefix!%%G. !%ptr_SelectedPackage%.Items[%%G].Desc.LineFormat! Pending"
+)
+exit /b
+
+:update_installation_status
+CLS
+echo Installation Status
+echo.
+FOR /L %%G IN (1,1,!%ptr_SelectedPackage%.Items.Length!) DO (
+    IF !%ptr_SelectedPackage%.Items[%%G].InstallState.ChangeFlag! EQU 1 (
+        SET "%ptr_SelectedPackage%.Items[%%G].InstallState.ChangeFlag=0"
+        REM SET ptr_item=
+        SET "exit_code=!%ptr_SelectedPackage%.Items[%%G].InstallState.ExitCode!"
+        SET "exit_code_file=!%ptr_SelectedPackage%.Items[%%G].InstallState.ExitCodeFile!"
+
+        IF "!exit_code!" EQU "" (
+            SET status=RUNNING
+            IF "!exit_code_file!" NEQ "" (
+                IF EXIST "!exit_code_file!" (
+                    REM Background has finihed
+                    SET /A "background_install_finished_count+=1"
+                    FOR /F %%G in ('TYPE "!exit_code_file!"') DO SET "exit_code=%%G"
+                    IF "!exit_code!" EQU "" (
+                        REM This should never happen.
+                        REM background install should redirect ErrorLevel value to the file
+                    ) ELSE IF !exit_code! EQU 0 (
+                        call:str_color "SUCCESS" %COLOR_GREEN% status
+                    ) ELSE (
+                        call:str_color "FAILED. Exit Code: !exit_code!." %COLOR_RED% status
+                    )
+                ) ELSE (
+                    REM Background Still Running, check again next
+                    SET "%ptr_SelectedPackage%.Items[%%G].InstallState.ChangeFlag=1"
+                )
+            )
+            
+        ) ELSE (
+            IF !exit_code! EQU 0 (
+                call:str_color "SUCCESS" %COLOR_GREEN% status
+            ) ELSE (
+                call:str_color "FAILED. Exit Code: !exit_code!." %COLOR_RED% status
+            )
+        )
+        set "%ptr_SelectedPackage%.Items[%%G].InstallState.Text= !prefix!%%G. !%ptr_SelectedPackage%.Items[%%G].Desc.LineFormat! !status!"
+    )
+    echo !%ptr_SelectedPackage%.Items[%%G].InstallState.Text!
+)
+    REM SET "exit_code=!%ptr_item%.ExitCode!"
+    REM SET "exit_code_file=!%ptr_item%.ExitCodeFile!"
+
+    REM IF "!exit_code!" EQU "" (
+    REM     SET install_state=Running
+    REM ) ELSE (
+    REM     IF !exit_code! EQU 0 (
+    REM         call:str_color "SUCCESS" %COLOR_GREEN% install_state
+    REM     ) ELSE (
+    REM         call:str_color "FAILED. Exit Code: !exit_code!." %COLOR_RED% install_state
+    REM     )
+    REM )
+
+    REM echo.  !prefix!%%A. !pkg_item_%%A_in_menu_text!
+    REM SET "menu_entry=!%ptr_SelectedPackage%.Items[%%G].MenuEntry!"
+    REM IF "!menu_entry!" EQU "" (
+    REM     SET "app_name=!%ptr_SelectedPackage%.Items[%%G]!"
+    REM     SET "menu_entry=!app_name!"
+    REM )
+    REM echo.  !prefix!%%G. !menu_entry!
+    REM echo.  !prefix!%%G. !%ptr_SelectedPackage%.Items[%%G].Desc.LineFormat! !%ptr_SelectedPackage%.Items[%%G].PreparationStatus!
+echo.
+exit /b
+
 :check_app_cfg
 rem Get start time:
 for /F "tokens=1-4 delims=:.," %%a in ("%time%") do (
@@ -543,8 +666,8 @@ for /F "tokens=1-4 delims=:.," %%a in ("%time%") do (
 )
 echo.
 CALL:echo_verbose 1 "Loading INI file . . ."
-FOR /L %%G IN (1,1,!%ptr_SelectedPaketInstall%.Items.Length!) DO (
-    SET "app_name=!%ptr_SelectedPaketInstall%.Items[%%G]!"
+FOR /L %%G IN (1,1,!%ptr_SelectedPackage%.Items.Length!) DO (
+    SET "app_name=!%ptr_SelectedPackage%.Items[%%G]!"
     call SET "is_loaded=%%AppCfg[!app_name!].is_loaded%%"
     REM IF "%AppCfg[!app_name!].is_loaded%" NEQ "1" echo Getting configuration for !app_name!
     IF "!is_loaded!" NEQ "1" (
@@ -553,7 +676,7 @@ FOR /L %%G IN (1,1,!%ptr_SelectedPaketInstall%.Items.Length!) DO (
 
     )
     CALL SET "desc=%%AppCfg[!app_name!].desc%%"
-    SET "%ptr_SelectedPaketInstall%.Items[%%G].desc=!desc!"
+    SET "%ptr_SelectedPackage%.Items[%%G].desc=!desc!"
 
     REM CALL:echo_verbose 2 "Getting configuration for !app_name!"
     REM CALL:get_app_inst_cfg "%params_ini_file%" "!pkg_item_%%G!" pkg_item_%%G
@@ -567,55 +690,56 @@ FOR /L %%G IN (1,1,!%ptr_SelectedPaketInstall%.Items.Length!) DO (
 CALL:echo_verbose 1 "Preparing menu display . . ."
 REM Get longest string
 SET /A longest_str_len=0
-FOR /L %%G IN (1,1,!%ptr_SelectedPaketInstall%.Items.Length!) DO (
-    SET "app_desc=!%ptr_SelectedPaketInstall%.Items[%%G].desc!"
+FOR /L %%G IN (1,1,!%ptr_SelectedPackage%.Items.Length!) DO (
+    SET "app_desc=!%ptr_SelectedPackage%.Items[%%G].desc!"
     CALL:strLen "!app_desc!" str_len
-    SET "%ptr_SelectedPaketInstall%.Items[%%G].desc.StringLength=!str_len!"
+    SET "%ptr_SelectedPackage%.Items[%%G].desc.StringLength=!str_len!"
  
-    SET /a "pkg_item_%%G_str_len=!str_len!"
+    REM SET /a "pkg_item_%%G_str_len=!str_len!"
     IF !str_len! GTR !longest_str_len! SET /a "longest_str_len=!str_len!"
     
 )
 SET /A "max_char=longest_str_len+3"
-SET "%ptr_SelectedPaketInstall%.Items.MaxStringLength=%max_char%"
+SET "%ptr_SelectedPackage%.Items.MaxStringLength=%max_char%"
 
 
 REM echo longest_str_len %longest_str_len%
 REM Fill char
 SET "tmp_str="
-FOR /L %%G IN (1,1,!%ptr_SelectedPaketInstall%.Items.Length!) DO (
-    SET "app_name=!%ptr_SelectedPaketInstall%.Items[%%G]!"
-    SET "app_desc=!%ptr_SelectedPaketInstall%.Items[%%G].desc!"
-
-    REM SET "str_len=!pkg_item_%%G_str_len!""
-    SET "str_len=!%ptr_SelectedPaketInstall%.Items[%%G].desc.StringLength!"
-    SET /A "fill_char_count=max_char-str_len"
-    CALL:repeat_char - !fill_char_count! fill_char
-    REM IF !pkg_item_%%A.status_code! NEQ 0 (
-        REM CALL:str_color "!pkg_item_%%A.desc! !fill_char!" tmp_str
-    REM ) ELSE SET "tmp_str=!pkg_item_%%A.desc! !fill_char!"
-    REM SET "tmp_str=!pkg_item_%%G.desc! !fill_char!"
-    
+FOR /L %%G IN (1,1,!%ptr_SelectedPackage%.Items.Length!) DO (
+    SET "app_name=!%ptr_SelectedPackage%.Items[%%G]!"
+    SET "app_desc=!%ptr_SelectedPackage%.Items[%%G].desc!"
     CALL SET "status=%%AppCfg[!app_name!].status%%"
     CALL SET "status_code=%%AppCfg[!app_name!].status_code%%"
-    SET "tmp_str=!app_desc! !fill_char!"
+
+    SET "str_len=!%ptr_SelectedPackage%.Items[%%G].desc.StringLength!"
+    SET /A "fill_char_count=max_char-str_len"
+    CALL:repeat_char - !fill_char_count! fill_char
+    
+    SET "desc_lineformat=!app_desc! !fill_char!"
     IF !status_code! NEQ 0 (
-        call:str_color "!tmp_str!" %COLOR_RED% tmp_str
-        call:str_color "!status!" %COLOR_RED% status
+        call:str_color "!desc_lineformat!" %COLOR_RED% desc_colorlineformat
+        call:str_color "!status!" %COLOR_RED% status_colorformat
+        SET "tmp_str=!desc_colorlineformat! !status_colorformat!"
     ) ELSE (
-        call:str_color "!status!" %COLOR_GREEN% status
+        call:str_color "!status!" %COLOR_GREEN% status_colorformat
+        SET "tmp_str=!desc_lineformat! !status_colorformat!"
     )
-    SET "tmp_str=!tmp_str! !status!"
-    SET "%ptr_SelectedPaketInstall%.Items[%%G].MenuEntry=!tmp_str!"
+    
+    SET "%ptr_SelectedPackage%.Items[%%G].MenuEntry=!tmp_str!"
+    SET "%ptr_SelectedPackage%.Items[%%G].Desc.LineFormat=!desc_lineformat!"
+    SET "%ptr_SelectedPackage%.Items[%%G].PreparationStatus=!status!"
+    SET "%ptr_SelectedPackage%.Items[%%G].PreparationStatus.ColorFormat=!status_colorformat!"
+    
     REM echo tmp_str !tmp_str!
 
-    IF !pkg_item_%%G.status_code! NEQ 0 (
-        call:str_color "!tmp_str!" %COLOR_RED% tmp_str
-    )
+    REM IF !pkg_item_%%G.status_code! NEQ 0 (
+    REM     call:str_color "!tmp_str!" %COLOR_RED% tmp_str
+    REM )
     REM IF !AppCfg[].status_code! NEQ 0 (
     REM     call:str_color "!tmp_str!" %COLOR_RED% tmp_str
     REM )
-    SET "pkg_item_%%G_in_menu_text=!tmp_str! !pkg_item_%%G.status!"
+    REM SET "pkg_item_%%G_in_menu_text=!tmp_str! !pkg_item_%%G.status!"
     
 )
 REM pausepause
@@ -636,7 +760,7 @@ echo %hh%:%mm%:%ss%,%cc%
 REM pause
 EXIT /B
 
-:prepare_PaketInstall_menu_entry PaketInstall['name']
+:prepare_AppPackages_menu_entry AppPackages['name']
 SetLocal EnableExtensions EnableDelayedExpansion
 SET "paket=%~1"
 
@@ -644,6 +768,8 @@ SET "paket=%~1"
     IF "%out_result%" NEQ "" (set "%out_result%=%desc%") ELSE ECHO %out_result%
     EXIT /B %exit_code%
 )
+
+
 
 REM ----------------------------------------------------------------------
 REM WAIT FOR BACKGROUND INSTALLATION
@@ -684,7 +810,7 @@ FOR /L %%A IN (1,1,%bg_proc_num%) DO (
         SET "exit_code_file=%tmp_folder%\!bg_proc_%%A!.exit_code.tmp"
         IF EXIST "!exit_code_file!" (
             FOR /F %%a in ('type "!exit_code_file!"') DO SET /A "exit_code=%%a"
-            REM SET "%ptr_SelectedPaketInstall%="
+            REM SET "%ptr_SelectedPackage%="
             SET /A "bg_proc_%%A_exit_code=!exit_code!"
             SET /A "new_num_finished=num_finished+1"
             IF !exit_code! EQU 0 (
@@ -849,12 +975,12 @@ REM )
 
 SET "exit_code=%app_cfg.status_code%"
 echo Installing %app_cfg.desc% . . . . .
-REM IF %exit_code% NEQ 0 (
-REM     CALL:echo_err [ERROR]
-REM     CALL:get_error_description %exit_code% desc
-REM     CALL:echo_err "!desc!"
-REM     goto:install_2__end
-REM )
+IF %exit_code% NEQ 0 (
+    CALL:echo_err [ERROR]
+    CALL:get_error_description %exit_code% desc
+    CALL:echo_err "!desc!"
+    goto:install_2__end
+)
 REM SET "exit_codes_file=%~dpn0.exit_codes.tmp"
 REM type nul > "%exit_code_file%"
 REM IF EXIST "%exit_code_file%" (
@@ -891,7 +1017,7 @@ IF "%install_mode%"=="%_MODE_TEST%" (
         REM Start another cmd to capture exit code of app's installation
         %LOG% Executing command START "Installing %app_cfg.desc%" /D "%app_cfg.installer_dir%" /MIN cmd /v /c "(echo Don't Close this window...) & (%start_command%) & (echo Exit Code:^^!ERRORLEVEL^^!) & pause"
         REM START "%~n0 - Installing %app_cfg.desc%" /D "%app_cfg.installer_dir%" /MIN cmd /v /c "(echo Executing %app_cfg.installer_file% %app_cfg.param%) & (%start_command%) & SET /A "exit_code=ERRORLEVEL" & (echo Exit Code:^!ERRORLEVEL^! >exit_code.txt) & (echo Exit Code:^!ERRORLEVEL^!) & (echo %google_search%^!ERRORLEVEL^!) & pause"
-        echo %app_name%>> "%no_wait_installers_file%"
+        echo.%app_name%>> "%no_wait_installers_file%"
         START "%~n0 - Installing %app_cfg.desc%" /D "%app_cfg.installer_dir%" /MIN cmd /v /c "(echo Executing %app_cfg.installer_file% %app_cfg.param%) & (%start_command%) & (echo ^!ERRORLEVEL^!> "%tmp_folder%\%app_name%.exit_code.tmp")"
     )
     
@@ -962,6 +1088,21 @@ REM Function body
     EXIT /B %exit_code%
 )
 
+:init_AppCfg_status_code
+SET APPCFG_STATUS_CODE_DEFINED=1
+
+SET APPCFG_STATUS_READY=0
+SET APPCFG_STATUS_INI_SECTION_NOT_FOUND=1
+SET APPCFG_STATUS_INSTALLER_DIR_NOT_FOUND=2
+SET APPCFG_STATUS_SPECIFIED_INSTALLER_DIR_NOT_FOUND=3
+SET APPCFG_STATUS_INSTALLER_FILE_NOT_FOUND=4
+SET APPCFG_STATUS_SPECIFIED_INSTALLER_FILE_NOT_FOUND=0
+SET APPCFG_STATUS_NO_SILENT_SWITCH=0
+SET APPCFG_STATUS_READY=0
+SET APPCFG_STATUS_READY=0
+
+Exit /b
+
 :get_appcfg IniContentVar SectionName OutVar
 REM ==================================================================================
 REM FUNCTION GET APP'S INSTALLATION CONFIGURATION
@@ -980,8 +1121,7 @@ SET "SectionName=%~2"
 SET "OutVar=%~3"
 
 SET "SectionVar=%IniContentVar%[%SectionName%]"
-
-REM IF DEFINED %OutVar%[%SectionName%] goto:get_appcfg__end
+SET /A "exit_code=0"
 
 SET "cfg_installer_dir=!%SectionVar%[installer_dir]!"
 SET "cfg_specific_windows_number="
@@ -998,6 +1138,12 @@ SET /A "cfg_status_code=0"
 SET "cfg_status=Ready"
 SET "cfg_desc=%SectionName%"
 
+IF "!%IniContentVar%[%SectionName%].Exist!" NEQ "1" (
+    SET /A "exit_code=1"
+    SET "cfg_status=INI Section Not Found"
+    goto:get_appcfg__end
+)
+
 :get_appcfg__installer_dir
 IF DEFINED cfg_installer_dir (
     REM If not absolute path
@@ -1008,7 +1154,7 @@ IF DEFINED cfg_installer_dir (
     IF NOT EXIST "!cfg_installer_dir!" (
         rem installer_dir not found
         %LOG% Specified installer_dir not found: !cfg_installer_dir!
-        SET /A "cfg_status_code=1"
+        SET /A "exit_code=1"
         SET "cfg_status=Specified Folder Not Found"
         goto:get_appcfg__end
     )
@@ -1017,7 +1163,7 @@ IF DEFINED cfg_installer_dir (
     IF NOT EXIST "!cfg_installer_dir!" (
         rem installer_dir not found
         %LOG% installer_dir not found: !cfg_installer_dir!
-        SET /A "cfg_status_code=1"
+        SET /A "exit_code=1"
         SET "cfg_status=Folder Not Found"
         goto:get_appcfg__end
     )
@@ -1051,7 +1197,7 @@ IF DEFINED cfg_installer_file (
     )
     IF NOT EXIST "!cfg_installer_file!" (
         %LOG% Specified installer_file not found: !cfg_installer_file!
-        SET /A "cfg_status_code=1"
+        SET /A "exit_code=1"
         SET "cfg_status=Specified Installer File Not Found"
         goto:get_appcfg__end
     )
@@ -1060,7 +1206,7 @@ IF DEFINED cfg_installer_file (
     CALL:search_installer_file "%cfg_installer_dir%" cfg_installer_file
     IF !ERRORLEVEL! NEQ 0 (
         %LOG% Can't find any
-        SET /A "cfg_status_code=3"
+        SET /A "exit_code=3"
         SET "cfg_status=Installer File Not Found"
         REM CALL:str_color "INSTALLER FILE NOT FOUND" %COLOR_RED% cfg_status
         goto:get_appcfg__end
@@ -1079,7 +1225,7 @@ IF NOT DEFINED cfg_param (
     call:get_default_param "%cfg_installer_file%" cfg_param
     IF "!cfg_param!" EQU "" (
         %LOG% No Params
-        SET /A "cfg_status_code=3"
+        SET /A "exit_code=3"
         SET "cfg_status=No Parameter"
         REM CALL:str_color "PARAM NOT SPECIFIED" %COLOR_RED% cfg_status
         goto:get_appcfg__end
@@ -1106,10 +1252,10 @@ IF NOT EXIST "%cfg_crack_dst%" (
         SET "%OutVar%.crack_file=%cfg_crack_file%"
         SET "%OutVar%.crack_dst=%cfg_crack_dst%"
         SET "%OutVar%.status=%cfg_status%"
-        SET "%OutVar%.status_code=%cfg_status_code%"
+        SET "%OutVar%.status_code=%exit_code%"
         SET "%OutVar%.desc=%cfg_desc%"
     )
-    EXIT /B %cfg_status_code%
+    EXIT /B %exit_code%
 )
 
 :get_default_param file OutVar
@@ -2508,6 +2654,7 @@ FOR /F "delims=" %%G in ('type "%~1"') DO (
             SET "section=%%g"
             SET "%~2.section[!section_num!]=!section!"
             SET "%~2[!section!].key.length=!key_num!"
+            SET "%~2[!section!].Exist=1"
         )
     ) ELSE (
         FOR /F "tokens=1* delims==" %%g in ("!line!") DO (
@@ -2865,3 +3012,20 @@ exit /b
     echo   ^</body^>
     echo ^</html^>
 ) >> "%~1"
+exit /b
+
+:var_naming
+echo. Variable naming
+echo. 
+echo. Integer   [i]
+echo. String    [s]
+echo. Object    [o]
+echo. Array     [a]
+echo. Pointer   [p]
+echo. File      [f]
+echo. 
+echo. Array of Integer    [ai]
+echo. Array of String     [as]
+echo. Array of Object     [ao]
+
+exit /b
