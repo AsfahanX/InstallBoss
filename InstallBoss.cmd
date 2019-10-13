@@ -1,9 +1,9 @@
 @echo off
 REM https://github.com/asfahann/InstallBoss/releases/latest
+REM https://github.com/asfahann/InstallBoss/releases/latest/download/InstallBoss.cmd
 
-REM TODO 1: Fix install_2 without check status (unprepared cfg), will install without waiting anyway
-REM TODO 2: Fix double echo on error
-REM TODO 3: Fix Fail Report Numbering
+REM TODO 1: Fix double echo on error
+REM TODO 2: Fix Numbering on Fail Report 
 
 REM.-- Prepare the Command Processor
 SETLOCAL ENABLEEXTENSIONS
@@ -34,6 +34,7 @@ SET "_MODE_TEST=2"
 SET "COMMENT_CHAR=;"
 SET "google_search=https://www.google.com/search?q="
 SET "latest_release_url=https://github.com/asfahann/InstallBoss/releases/latest"
+SET "latest_release_binary=https://github.com/asfahann/InstallBoss/releases/latest/download/InstallBoss.cmd"
 
 SET /A "VERBOSE_LEVEL_ERROR=1"
 SET /A "VERBOSE_LEVEL_WARNING=2"
@@ -146,6 +147,13 @@ echo Loading INI file . . .
 call:get_ini_content "%params_ini_file%" IniContent
 echo.
 
+REM set "IniContent[Winrar kosong]"
+REM call:copy_var "InniContent[Winrar kosong]" new_var
+REM echo with copy_var:
+REM set new_var
+REM pause
+REM exit /b
+
 REM TODO Detect first run
 SET /A "folder_found=0"
 FOR /F "delims=" %%G in ('DIR "%search_location%" /ad-h /B ^| findstr /v /r /c:"^[.]"') DO (
@@ -165,7 +173,7 @@ IF %preload_app_cfg% EQU 1 (
     DIR "%search_location%" /A:D-H /O:N /B | findstr /v /r /c:"^[.]">"%paket_semua_folder_file%"
     %ECHO_VERBOSE% Load All AppCfg in %search_location%
     FOR /F "delims=" %%G in ('type "%paket_semua_folder_file%"') DO (
-        call:get_appcfg IniContent "%%G" AppCfg
+        call:get_appcfg IniContent "%%G" "AppCfg[%%G]"
     )
 )
 
@@ -514,7 +522,7 @@ FOR /L %%G IN (1,1,!%ptr_SelectedPaketInstall%.Items.Length!) DO (
     REM IF "%AppCfg[!app_name!].is_loaded%" NEQ "1" echo Getting configuration for !app_name!
     IF "!is_loaded!" NEQ "1" (
         %ECHO_VERBOSE% Getting configuration for !app_name!
-        CALL:get_appcfg IniContent "!app_name!" AppCfg
+        CALL:get_appcfg IniContent "!app_name!" "AppCfg[!app_name!]"
 
     )
     CALL SET "desc=%%AppCfg[!app_name!].desc%%"
@@ -779,8 +787,11 @@ SET "exit_code=0"
 
 SET /A "prepared=0"
 IF DEFINED ptr_app_cfg (
-    SET "%ptr_app_cfg%" > nul 2>&1
-    IF !ERRORLEVEL! EQU 0 SET /A "prepared=1"
+    REM SET "%ptr_app_cfg%" > nul 2>&1
+    CALL:copy_var "%ptr_app_cfg%" app_cfg
+    IF !ERRORLEVEL! EQU 0 (
+        SET /A "prepared=1"
+    )
 )
 REM IF NOT DEFINED ptr_app_cfg (
     REM SET "op_or_check=1"
@@ -789,22 +800,24 @@ REM ) ELSE (
 REM )
 IF %prepared% NEQ 1 (
     %LOG% Getting app's configuration
-    CALL:get_app_inst_cfg "%params_ini_file%" "%app_name%" app_cfg
+    REM CALL:get_app_inst_cfg "%params_ini_file%" "%app_name%" app_cfg
+    CALL:get_appcfg IniContent "%app_name%" app_cfg
     SET "exit_code=!ERRORLEVEL!"
-    SET "ptr_app_cfg=app_cfg"
-) ELSE (
-    %LOG% App's configuration already loaded
-    REM copy variable attributes
-    REM SET "%ptr_app_cfg%"
-    SET "%ptr_app_cfg%" > nul
-    IF !ERRORLEVEL! EQU 0 (
-        FOR /F "tokens=1,* delims=." %%A in ('SET "%ptr_app_cfg%"') do (
-            IF "%%B" NEQ "" SET "app_cfg.%%B"
-        )
-    ) ELSE (
-        CALL:echo_err "UNKNOWN ERROR"
-    )
+    REM SET "ptr_app_cfg=app_cfg"
 )
+REM ) ELSE (
+REM     %LOG% App's configuration already loaded
+REM     REM copy variable attributes
+REM     REM SET "%ptr_app_cfg%"
+REM     SET "%ptr_app_cfg%" > nul
+REM     IF !ERRORLEVEL! EQU 0 (
+REM         FOR /F "tokens=1,* delims=." %%A in ('SET "%ptr_app_cfg%"') do (
+REM             IF "%%B" NEQ "" SET "app_cfg.%%B"
+REM         )
+REM     ) ELSE (
+REM         CALL:echo_err "UNKNOWN ERROR"
+REM     )
+REM )
 
 SET "exit_code=%app_cfg.status_code%"
 echo Installing %app_cfg.desc% . . . . .
@@ -1055,18 +1068,18 @@ IF NOT EXIST "%cfg_crack_dst%" (
 :get_appcfg__end
 (ENDLOCAL & REM -- RETURN VALUES
     IF "%OutVar%" NEQ "" (
-        SET "%OutVar%[%SectionName%].is_loaded=1"
-        SET "%OutVar%[%SectionName%].installer_dir=%cfg_installer_dir%"
-        SET "%OutVar%[%SectionName%].specific_windows_number=%cfg_specific_windows_number%"
-        SET "%OutVar%[%SectionName%].specific_windows_bit=%cfg_specific_windows_bit%"
-        SET "%OutVar%[%SectionName%].installer_file=%cfg_installer_file%"
-        SET "%OutVar%[%SectionName%].wait=%cfg_wait%"
-        SET "%OutVar%[%SectionName%].param=%cfg_param%"
-        SET "%OutVar%[%SectionName%].crack_file=%cfg_crack_file%"
-        SET "%OutVar%[%SectionName%].crack_dst=%cfg_crack_dst%"
-        SET "%OutVar%[%SectionName%].status=%cfg_status%"
-        SET "%OutVar%[%SectionName%].status_code=%cfg_status_code%"
-        SET "%OutVar%[%SectionName%].desc=%cfg_desc%"
+        SET "%OutVar%.is_loaded=1"
+        SET "%OutVar%.installer_dir=%cfg_installer_dir%"
+        SET "%OutVar%.specific_windows_number=%cfg_specific_windows_number%"
+        SET "%OutVar%.specific_windows_bit=%cfg_specific_windows_bit%"
+        SET "%OutVar%.installer_file=%cfg_installer_file%"
+        SET "%OutVar%.wait=%cfg_wait%"
+        SET "%OutVar%.param=%cfg_param%"
+        SET "%OutVar%.crack_file=%cfg_crack_file%"
+        SET "%OutVar%.crack_dst=%cfg_crack_dst%"
+        SET "%OutVar%.status=%cfg_status%"
+        SET "%OutVar%.status_code=%cfg_status_code%"
+        SET "%OutVar%.desc=%cfg_desc%"
     )
     EXIT /B %cfg_status_code%
 )
@@ -1548,14 +1561,18 @@ REM HEADER
     echo ; crack_dst=
     echo ;
     echo ; -----------------------------------------------
-    echo ; msi
-    echo ;	/quiet /norestart
-    echo ;	/passive /norestart
+    echo ; MSI packages
+    echo ;      /quiet /norestart
+    echo ;      /passive /norestart
     echo ; Inno Setup
-    echo ; 	/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-
-    echo ; 	/SILENT /SUPPRESSMSGBOXES /NORESTART /SP-
-    echo ; NSIS
-    echo ;	/S
+    echo ;      /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-
+    echo ;      /SILENT /SUPPRESSMSGBOXES /NORESTART /SP-
+    echo ; Nullsoft Scriptable Install System NSIS
+    echo ;      /S
+    echo ;
+    echo ; More info about silent/unattended installation at:
+    echo ;      http://unattended.sourceforge.net/installers.php
+    echo ;      https://docs.microsoft.com/en-us/windows/win32/msi/standard-installer-command-line-options
     echo ;
     echo ; -------------------------------------------------
     echo ; Some tools to detect silent install switches:
@@ -1574,6 +1591,7 @@ REM CONTENT
     echo [7Zip]
     echo param=/passive /norestart
     echo param_quiet=/quiet /norestart
+    echo param_exe=/S
     echo ; wait=false
     echo [AIMP]
     echo param=/AUTO /SILENT
@@ -1584,6 +1602,7 @@ REM CONTENT
     echo ; param=-sfx_nu /sALL /msi EULA_ACCEPT=YES
     echo param=/sPB /msi /norestart EULA_ACCEPT=YES
     echo param_quiet=-sfx_nu /sALL /msi /norestart EULA_ACCEPT=YES
+    echo direct_download_url=http://ardownload.adobe.com/pub/adobe/reader/win/AcrobatDC/1901220036/AcroRdrDC1901220036_en_US.exe
     echo [Adobe Flash Player for Chrome, Chromium, Opera, UC Browser]
     echo param=-install
     echo [Adobe Flash Player for Firefox, Safari]
@@ -2418,12 +2437,15 @@ SET "src_var=%~1"
 SET "dst_var=%~2"
 REM SET "command=SET "%src_var%""
 SET "command=SET %src_var%^| findstr /LIBC:"%src_var%""
-FOR /F "tokens=1* delims==" %%G in ('%command%') DO (
-    SET "var_name=%%G"
-    SET "attr_name=!var_name:%src_var%=!"
-    SET "%dst_var%!attr_name!=%%H"
-)
-exit /b
+(
+    FOR /F "tokens=1* delims==" %%G in ('%command%') DO (
+        SET "var_name=%%G"
+        SET "attr_name=!var_name:%src_var%=!"
+        SET "%dst_var%!attr_name!=%%H"
+    )
+) && (exit /b !ERRORLEVEL!) || (exit /b !ERRORLEVEL!)
+REM echo ERRORLEVEL !ERRORLEVEL!
+
 
 :get_ini_content file outVar
 REM Example 1:
