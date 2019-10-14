@@ -8,12 +8,10 @@ SETLOCAL ENABLEDELAYEDEXPANSION
 CD /D "%~dp0"
 
 REM.-- Version History --
-REM         0.1           2019-10-03 Author Asfahann
-REM         0.2           2019-10-06 Author Asfahann
-REM         0.3           2019-10-14 Author Asfahann
-SET version=0.1-beta    & rem 2019-10-03 p.h.  initial version, providing the framework
-SET version=0.2         & rem 2019-10-06 p.h.  Added feature to create folder structure example
-SET version=0.3         & rem 2019-10-14 p.h.  Added improved UI on Installation progress
+REM         X.X               YYYY-MM-DD  Author    Description
+SET version=0.1-beta    & rem 2019-10-03  Asfahan   initial version, providing the framework
+SET version=0.2         & rem 2019-10-06  Asfahan   Added feature to create folder structure example
+SET version=0.3         & rem 2019-10-14  Asfahan   Added improved UI on Installation progress
 REM !! For a new version entry, copy the last entry down and modify Date, Author and Description
 SET version=%version: =%
 
@@ -86,8 +84,8 @@ SET /A "preload_app_cfg=0"
 SET "SETTINGS_VERBOSE_LEVEL=5"
 SET "default_msi_param=/passive /norestart"
 
-SET "verbose=1"
-SET "debug=1"
+SET "verbose=0"
+SET "debug=0"
 
 SET /A "suppress_error=0"
 
@@ -520,8 +518,12 @@ FOR /L %%G IN (1,1,%apps_count%) DO (
 :wait_background_install
 CALL:update_installation_status
 IF %background_install_finished_count% LSS %background_install_running_count% (
+    echo ================================================================
+    echo.
     %ECHO_DEBUG% %background_install_finished_count% of %background_install_running_count% Background installation finihed
+    SET /P ="Waiting For Background Installation . . . "<nul
     ping /n 3 127.0.0.1>nul
+    echo.
     goto:wait_background_install
 )
 echo.
@@ -584,7 +586,7 @@ FOR /L %%G IN (1,1,!%ptr_SelectedPackage%.Items.Length!) DO (
     
     SET "ptr_item=%ptr_SelectedPackage%.Items[%%G]"
     SET "!ptr_item!.InstallState.ChangeFlag=0"
-    SET "!ptr_item!.InstallState.Status=Pending"
+    SET "!ptr_item!.InstallState.Status="
     SET "!ptr_item!.InstallState.ExitCode="
     SET "!ptr_item!.InstallState.ExitCodeFile="
 
@@ -604,7 +606,7 @@ FOR /L %%G IN (1,1,!%ptr_SelectedPackage%.Items.Length!) DO (
         SET "exit_code_file=!%ptr_SelectedPackage%.Items[%%G].InstallState.ExitCodeFile!"
 
         IF "!exit_code!" EQU "" (
-            SET status=RUNNING
+            SET status=Installing
             IF "!exit_code_file!" NEQ "" (
                 IF EXIST "!exit_code_file!" (
                     REM Background has finihed
@@ -3029,3 +3031,81 @@ echo. Array of String     [as]
 echo. Array of Object     [ao]
 
 exit /b
+
+
+:Color
+:: v23c
+:: http://www.dostips.com/forum/viewtopic.php?p=41155#p41155
+:: Arguments: hexColor text [\n] ...
+:: \n -> newline ... -> repeat
+:: Supported in windows XP, 7, 8.
+:: This version works using Cmd /U
+:: In XP extended ascii characters are printed as dots.
+:: For print quotes, use empty text.
+:: Example:
+:: Call :Color A "######" \n E "" C " 23 " E "!" \n B "#&calc" \n
+SetLocal EnableExtensions EnableDelayedExpansion
+Subst `: "!Temp!" >Nul &`: &Cd \
+SetLocal DisableDelayedExpansion
+Echo(|(Pause >Nul &Findstr "^" >`)
+Cmd /A /D /C Set /P "=." >>` <Nul
+For /F %%# In (
+'"Prompt $H &For %%_ In (_) Do Rem"') Do (
+Cmd /A /D /C Set /P "=%%# %%#" <Nul >`.1
+Copy /Y `.1 /B + `.1 /B + `.1 /B `.3 /B >Nul
+Copy /Y `.1 /B + `.1 /B + `.3 /B `.5 /B >Nul
+Copy /Y `.1 /B + `.1 /B + `.5 /B `.7 /B >Nul
+)
+:__Color
+Set "Text=%~2"
+If Not Defined Text (Set Text=^")
+SetLocal EnableDelayedExpansion
+For %%_ In ("&" "|" ">" "<"
+) Do Set "Text=!Text:%%~_=^%%~_!"
+Set /P "LF=" <` &Set "LF=!LF:~0,1!"
+For %%# in ("!LF!") Do For %%_ In (
+\ / :) Do Set "Text=!Text:%%_=%%~#%%_%%~#!"
+For /F delims^=^ eol^= %%# in ("!Text!") Do (
+If #==#! EndLocal
+If \==%%# (Findstr /A:%~1 . \` Nul
+Type `.3) Else If /==%%# (Findstr /A:%~1 . /.\` Nul
+Type `.5) Else (Cmd /A /D /C Echo %%#\..\`>`.dat
+Findstr /F:`.dat /A:%~1 .
+Type `.7))
+If "\n"=="%~3" (Shift
+Echo()
+Shift
+Shift
+If ""=="%~1" Del ` `.1 `.3 `.5 `.7 `.dat &Goto :Eof
+Goto :__Color
+EXIT /B
+
+:ncol_init
+for /f "delims=#" %%i in ('"prompt #$H# &for %%b in (1) do rem"') do (
+    set "bs=%%i"
+)
+exit /b
+:ncol
+REM @echo off
+REM https://stackoverflow.com/a/15017779
+setlocal
+if "%~1"=="/?" (
+echo.
+echo    ncol ["Text"] [Colour]
+echo.
+echo "Text" - The text you want displayed in another colour.
+echo          Remember that spaces cannot be added if you don't put the text in
+echo          quotation marks (""^).
+echo.
+echo Colour - The hexadecimal colour code that you want the text to be changed into.
+echo          For more information of colour codes, see "color /?"
+echo.
+exit /b
+)
+
+<nul >"%~1.@" set /p "=.%bs%%bs%%bs%%bs%"
+findstr /p /a:%2 . "*.@"
+endlocal
+del "*.@"
+REM @echo on
+@exit /b
