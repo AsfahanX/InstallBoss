@@ -415,8 +415,8 @@ FOR /L %%G IN (1,1,!%ptr_SelectedPackage%.Items.Length!) DO (
     )
     REM echo.  !prefix!%%A. !pkg_item_%%A_in_menu_text!
     SET "menu_entry=!%ptr_SelectedPackage%.Items[%%G].MenuEntry!"
+	SET "app_name=!%ptr_SelectedPackage%.Items[%%G]!"
     IF "!menu_entry!" EQU "" (
-        SET "app_name=!%ptr_SelectedPackage%.Items[%%G]!"
         SET "menu_entry=!app_name!"
     )
     echo.  !prefix!%%G. !menu_entry!
@@ -427,6 +427,7 @@ FOR /L %%G IN (1,1,!%ptr_SelectedPackage%.Items.Length!) DO (
     IF %show_detail% EQU 1 (
         REM echo.  !prefix!!prefix_ex!   file  : !pkg_item_%%G.installer_file!
         REM echo.  !prefix!!prefix_ex!   param : !pkg_item_%%G.param!
+		REM call echo.  !prefix!!prefix_ex!   file  : %%AppCfg[Winrar].installer_file%%
         call echo.  !prefix!!prefix_ex!   file  : %%AppCfg[!app_name!].installer_file%%
         call echo.  !prefix!!prefix_ex!   param : %%AppCfg[!app_name!].param%%
         
