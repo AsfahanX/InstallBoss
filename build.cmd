@@ -1,3 +1,4 @@
+rem test commit
 @echo off
 CD /D "%~dp0"
 
